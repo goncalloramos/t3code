@@ -171,9 +171,11 @@ export const runWakeupDispatcher: Effect.Effect<
     // Wakeups dispatch concurrently, one in flight per thread: quiescence
     // waiting for one busy thread must not head-of-line-block every other
     // thread's wakeup (which could be superseded while it waits). A wakeup
-    // arriving while its thread already has one in flight is coalesced away —
-    // the adapter buffers all pending activity behind a single attach.
+    // arriving while its thread already has one in flight is held pending;
+    // when the in-flight dispatch finishes it re-offers the pending request
+    // so a failed dispatch does not permanently lose the wakeup.
     const inFlightThreads = yield* Ref.make(new Set<ThreadId>());
+    const pendingWakeups = yield* Ref.make(new Map<ThreadId, ProviderWakeupRequest>());
     return yield* relay.take.pipe(
       Effect.flatMap((input) =>
         Ref.modify(inFlightThreads, (current) => {
@@ -192,16 +194,37 @@ export const runWakeupDispatcher: Effect.Effect<
                       const next = new Set(current);
                       next.delete(input.threadId);
                       return next;
-                    }),
+                    }).pipe(
+                      Effect.andThen(
+                        Ref.modify(pendingWakeups, (m) => {
+                          const pending = m.get(input.threadId);
+                          if (pending === undefined) return [undefined, m] as const;
+                          const next = new Map(m);
+                          next.delete(input.threadId);
+                          return [pending, next] as const;
+                        }),
+                      ),
+                      Effect.flatMap((pending) =>
+                        pending !== undefined ? relay.offer(pending) : Effect.void,
+                      ),
+                    ),
                   ),
                   Effect.forkScoped,
                   Effect.asVoid,
                 )
-              : Effect.logInfo("orchestration-v2.provider-wakeup.coalesced", {
-                  threadId: input.threadId,
-                  providerThreadId: input.providerThreadId,
-                  origin: input.origin,
-                }),
+              : Ref.update(pendingWakeups, (m) => {
+                  const next = new Map(m);
+                  next.set(input.threadId, input);
+                  return next;
+                }).pipe(
+                  Effect.andThen(
+                    Effect.logInfo("orchestration-v2.provider-wakeup.coalesced", {
+                      threadId: input.threadId,
+                      providerThreadId: input.providerThreadId,
+                      origin: input.origin,
+                    }),
+                  ),
+                ),
           ),
         ),
       ),
