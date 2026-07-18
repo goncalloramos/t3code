@@ -1,5 +1,4 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import * as NodeOS from "node:os";
 import * as NetService from "@t3tools/shared/Net";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 import { assert, describe, it } from "@effect/vitest";
@@ -127,9 +126,8 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
   });
 
   describe("createDevRunnerEnv", () => {
-    it.effect("defaults T3CODE_HOME to ~/.t3 when not provided", () =>
+    it.effect("leaves the shared home implicit and disables browser auto-open", () =>
       Effect.gen(function* () {
-        const path = yield* Path.Path;
         const env = yield* createDevRunnerEnv({
           mode: "dev",
           baseEnv: {},
@@ -144,7 +142,28 @@ it.layer(NodeServices.layer)("dev-runner", (it) => {
           devUrl: undefined,
         });
 
-        assert.equal(env.T3CODE_HOME, path.resolve(NodeOS.homedir(), ".t3"));
+        assert.equal(env.T3CODE_HOME, undefined);
+        assert.equal(env.T3CODE_NO_BROWSER, "1");
+      }),
+    );
+
+    it.effect("allows browser auto-open to be explicitly enabled", () =>
+      Effect.gen(function* () {
+        const env = yield* createDevRunnerEnv({
+          mode: "dev",
+          baseEnv: {},
+          serverOffset: 0,
+          webOffset: 0,
+          t3Home: undefined,
+          noBrowser: false,
+          autoBootstrapProjectFromCwd: undefined,
+          logWebSocketEvents: undefined,
+          host: undefined,
+          port: undefined,
+          devUrl: undefined,
+        });
+
+        assert.equal(env.T3CODE_NO_BROWSER, "0");
       }),
     );
 

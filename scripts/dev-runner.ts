@@ -245,7 +245,8 @@ export function createDevRunnerEnv({
   return Effect.gen(function* () {
     const serverPort = port ?? BASE_SERVER_PORT + serverOffset;
     const webPort = BASE_WEB_PORT + webOffset;
-    const resolvedBaseDir = yield* resolveBaseDir(t3Home);
+    const configuredBaseDir = t3Home?.trim() || baseEnv.T3CODE_HOME?.trim() || undefined;
+    const resolvedBaseDir = yield* resolveBaseDir(configuredBaseDir);
     const isDesktopMode = mode === "dev:desktop";
 
     const output: NodeJS.ProcessEnv = {
@@ -254,8 +255,13 @@ export function createDevRunnerEnv({
       VITE_DEV_SERVER_URL:
         devUrl?.toString() ??
         `http://${isDesktopMode ? DESKTOP_DEV_LOOPBACK_HOST : "localhost"}:${webPort}`,
-      T3CODE_HOME: resolvedBaseDir,
     };
+
+    if (configuredBaseDir !== undefined) {
+      output.T3CODE_HOME = resolvedBaseDir;
+    } else {
+      delete output.T3CODE_HOME;
+    }
 
     if (!isDesktopMode) {
       output.T3CODE_PORT = String(serverPort);
@@ -274,10 +280,8 @@ export function createDevRunnerEnv({
       output.T3CODE_HOST = host;
     }
 
-    if (!isDesktopMode && noBrowser !== undefined) {
-      output.T3CODE_NO_BROWSER = noBrowser ? "1" : "0";
-    } else if (!isDesktopMode) {
-      delete output.T3CODE_NO_BROWSER;
+    if (!isDesktopMode) {
+      output.T3CODE_NO_BROWSER = (noBrowser ?? true) ? "1" : "0";
     }
 
     if (autoBootstrapProjectFromCwd !== undefined) {
@@ -519,9 +523,10 @@ export function runDevRunnerWithInput(input: DevRunnerCliInput) {
       serverOffset !== offset || webOffset !== offset
         ? ` selectedOffset(server=${serverOffset},web=${webOffset})`
         : "";
+    const baseDir = env.T3CODE_HOME ?? (yield* DEFAULT_T3_HOME);
 
     yield* Effect.logInfo(
-      `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.T3CODE_PORT)} webPort=${String(env.PORT)} baseDir=${String(env.T3CODE_HOME)}`,
+      `[dev-runner] mode=${input.mode} source=${source}${selectionSuffix} serverPort=${String(env.T3CODE_PORT)} webPort=${String(env.PORT)} baseDir=${baseDir}`,
     );
 
     if (input.dryRun) {
@@ -586,11 +591,15 @@ const devRunnerCli = Command.make("dev-runner", {
     Argument.withDescription("Development mode to run."),
   ),
   t3Home: Flag.string("home-dir").pipe(
-    Flag.withDescription("Base directory for all T3 Code data (equivalent to T3CODE_HOME)."),
+    Flag.withDescription(
+      "Explicit T3 Code data directory; runtime state is stored under userdata (equivalent to T3CODE_HOME).",
+    ),
     Flag.withFallbackConfig(optionalStringConfig("T3CODE_HOME")),
   ),
   noBrowser: Flag.boolean("no-browser").pipe(
-    Flag.withDescription("Browser auto-open toggle (equivalent to T3CODE_NO_BROWSER)."),
+    Flag.withDescription(
+      "Disable browser auto-open (default for web dev; set T3CODE_NO_BROWSER=0 to opt in).",
+    ),
     Flag.withFallbackConfig(optionalBooleanConfig("T3CODE_NO_BROWSER")),
   ),
   autoBootstrapProjectFromCwd: Flag.boolean("auto-bootstrap-project-from-cwd").pipe(
