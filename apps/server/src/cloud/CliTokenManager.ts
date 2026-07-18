@@ -3,6 +3,7 @@ import * as NodeHttp from "node:http";
 
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as Clock from "effect/Clock";
+import * as Cause from "effect/Cause";
 import * as Console from "effect/Console";
 import * as Context from "effect/Context";
 import * as Crypto from "effect/Crypto";
@@ -58,6 +59,15 @@ const OAuthTokenResponse = Schema.Struct({
   token_type: Schema.String,
 });
 
+const OidcIdentityClaimsJson = Schema.fromJsonString(
+  Schema.Struct({
+    email: Schema.optional(Schema.String),
+    preferred_username: Schema.optional(Schema.String),
+    sub: Schema.optional(Schema.String),
+  }),
+);
+const decodeOidcIdentityClaimsJson = Schema.decodeUnknownOption(OidcIdentityClaimsJson);
+
 /**
  * Best-effort read of the `email` (or fallback) claim from an OIDC id_token.
  * Only used to show the operator which account they linked, so a malformed
@@ -69,19 +79,12 @@ function idTokenIdentity(idToken: string | undefined): string | null {
   if (!payload) return null;
   const decoded = Encoding.decodeBase64UrlString(payload);
   if (decoded._tag !== "Success") return null;
-  try {
-    const claims = JSON.parse(decoded.success) as {
-      readonly email?: unknown;
-      readonly preferred_username?: unknown;
-      readonly sub?: unknown;
-    };
-    for (const value of [claims.email, claims.preferred_username, claims.sub]) {
-      if (typeof value === "string" && value.length > 0) return value;
-    }
-    return null;
-  } catch {
-    return null;
+  const claims = decodeOidcIdentityClaimsJson(decoded.success);
+  if (Option.isNone(claims)) return null;
+  for (const value of [claims.value.email, claims.value.preferred_username, claims.value.sub]) {
+    if (typeof value === "string" && value.length > 0) return value;
   }
+  return null;
 }
 
 export class CloudCliCredentialRemovalError extends Schema.TaggedErrorClass<CloudCliCredentialRemovalError>()(
@@ -148,11 +151,6 @@ export class CloudCliTokenManager extends Context.Service<
     readonly clear: Effect.Effect<void, CloudCliTokenManagerError>;
   }
 >()("t3/cloud/CliTokenManager/CloudCliTokenManager") {}
-
-const wrapError =
-  <WrappedError extends CloudCliTokenManagerError>(makeError: (cause: unknown) => WrappedError) =>
-  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, WrappedError, R> =>
-    effect.pipe(Effect.mapError(makeError));
 
 function stringToBytes(value: string): Uint8Array {
   return new TextEncoder().encode(value);
@@ -222,7 +220,7 @@ export const pasteCodeLogin = Effect.fn("cloud.cli_token.paste_code_login")(func
     // Clerk authorization codes expire on this horizon anyway; matching the
     // loopback flow's timeout turns an abandoned prompt into a clear error.
     Effect.timeout(CLOUD_CLI_OAUTH_CALLBACK_TIMEOUT),
-    Effect.catchTag("TimeoutError", (cause) =>
+    Effect.catchIf(Cause.isTimeoutError, (cause) =>
       Effect.fail(new CloudCliAuthorizationTimeoutError({ cause })),
     ),
   );
@@ -261,7 +259,7 @@ export const make = Effect.gen(function* () {
 
   const clear = secrets
     .remove(CLOUD_CLI_OAUTH_TOKEN_SECRET)
-    .pipe(wrapError((cause) => new CloudCliCredentialRemovalError({ cause })));
+    .pipe(Effect.mapError((cause) => new CloudCliCredentialRemovalError({ cause })));
 
   const read = Effect.fn("cloud.cli_token.read")(function* () {
     const encoded = yield* secrets.get(CLOUD_CLI_OAUTH_TOKEN_SECRET);
@@ -330,13 +328,9 @@ export const make = Effect.gen(function* () {
     yield* Console.log(`Open this URL to authorize T3 Connect:\n${authorizationUrl}\n`);
     const code = yield* Deferred.await(callback).pipe(
       Effect.timeout(CLOUD_CLI_OAUTH_CALLBACK_TIMEOUT),
-      Effect.catchTag("TimeoutError", (cause) =>
-        Effect.fail(
-          new CloudCliAuthorizationTimeoutError({
-            cause,
-          }),
-        ),
-      ),
+      Effect.catchTags({
+        TimeoutError: (cause) => Effect.fail(new CloudCliAuthorizationTimeoutError({ cause })),
+      }),
     );
     const { token } = yield* exchangeToken(metadata, {
       grant_type: "authorization_code",
@@ -360,14 +354,14 @@ export const make = Effect.gen(function* () {
 
   const getExisting = semaphore.withPermits(1)(
     getExistingNoLock().pipe(
-      wrapError((cause) => new CloudCliCredentialRefreshError({ cause })),
+      Effect.mapError((cause) => new CloudCliCredentialRefreshError({ cause })),
       Effect.provide(services),
     ),
   );
   const hasCredential = semaphore.withPermits(1)(
     read().pipe(
       Effect.map(Option.isSome),
-      wrapError((cause) => new CloudCliCredentialReadError({ cause })),
+      Effect.mapError((cause) => new CloudCliCredentialReadError({ cause })),
     ),
   );
   const get = semaphore.withPermits(1)(
@@ -383,17 +377,18 @@ export const make = Effect.gen(function* () {
         ? token.value
         : yield* Effect.scoped(login()).pipe(Effect.flatMap(persist));
     }).pipe(
-      wrapError((cause) => new CloudCliAuthorizationError({ cause })),
+      Effect.mapError((cause) => new CloudCliAuthorizationError({ cause })),
       Effect.provide(services),
     ),
   );
-  const store = (token: PersistedToken) =>
-    semaphore.withPermits(1)(
+  const store = Effect.fn("cloud.cli_token.store")(function* (token: PersistedToken) {
+    yield* semaphore.withPermits(1)(
       persist(token).pipe(
         Effect.asVoid,
-        wrapError((cause) => new CloudCliAuthorizationError({ cause })),
+        Effect.mapError((cause) => new CloudCliAuthorizationError({ cause })),
       ),
     );
+  });
 
   return CloudCliTokenManager.of({ get, getExisting, hasCredential, store, clear });
 });

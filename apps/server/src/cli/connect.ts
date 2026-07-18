@@ -44,6 +44,7 @@ import { relayUrlConfig } from "../cloud/publicConfig.ts";
 import { headlessRelayClientTracingLayer } from "../cloud/relayTracing.ts";
 import * as ServerConfig from "../config.ts";
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
+import * as ProcessRunner from "../processRunner.ts";
 import { readPersistedServerRuntimeState } from "../serverRuntimeState.ts";
 import { projectLocationFlags, resolveCliAuthConfig } from "./config.ts";
 
@@ -90,11 +91,12 @@ const authorizeCli = Effect.fn("cloud.cli.authorize")(function* (options: {
   // A stored credential whose refresh fails (revoked, expired grant) must
   // fall through to a fresh paste login, not dead-end the command.
   const existing = yield* tokens.getExisting.pipe(
-    Effect.catchTag("CloudCliCredentialRefreshError", () =>
-      Console.log(
-        "The stored T3 Connect credential could not be refreshed; signing in again.",
-      ).pipe(Effect.as(Option.none())),
-    ),
+    Effect.catchTags({
+      CloudCliCredentialRefreshError: () =>
+        Console.log(
+          "The stored T3 Connect credential could not be refreshed; signing in again.",
+        ).pipe(Effect.as(Option.none())),
+    }),
   );
   if (Option.isSome(existing)) {
     return null;
@@ -387,7 +389,9 @@ const disconnectCloud = Effect.fn("cloud.cli.disconnect")(function* (options: {
       Effect.tap((removed) =>
         removed ? Console.log("Removed the T3 Code background service.") : Effect.void,
       ),
-      Effect.catchTag("BootServiceUnsupportedError", () => Effect.succeed(false)),
+      Effect.catchTags({
+        BootServiceUnsupportedError: () => Effect.succeed(false),
+      }),
       Effect.catch((error) =>
         Console.warn(`Could not remove the background service: ${error.message}`).pipe(
           Effect.as(false),
@@ -442,7 +446,7 @@ const runCloudCommand = <A, E>(
         baseDir: config.baseDir,
         logsDir: config.logsDir,
         cliVersion: packageJson.version,
-      }),
+      }).pipe(Layer.provide(ProcessRunner.layer)),
       headlessRelayClientTracingLayer,
     ).pipe(
       Layer.provideMerge(FetchHttpClient.layer),

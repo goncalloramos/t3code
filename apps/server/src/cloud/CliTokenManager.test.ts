@@ -2,7 +2,9 @@ import { readConnectAuthorizeRequest } from "@t3tools/shared/connectAuth";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as ConfigProvider from "effect/ConfigProvider";
+import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
+import * as Encoding from "effect/Encoding";
 import * as Layer from "effect/Layer";
 import * as Schema from "effect/Schema";
 import * as HttpClient from "effect/unstable/http/HttpClient";
@@ -25,13 +27,33 @@ interface RecordedTokenRequest {
 
 // A JWT whose payload claims { email: "theo@example.test" } (signature is not
 // verified — the CLI only reads the claim to display the connected account).
+const TestIdTokenHeaderJson = Schema.fromJsonString(Schema.Struct({ alg: Schema.Literal("none") }));
+const TestIdTokenPayloadJson = Schema.fromJsonString(Schema.Struct({ email: Schema.String }));
+const encodeTestIdTokenHeader = Schema.encodeSync(TestIdTokenHeaderJson);
+const encodeTestIdTokenPayload = Schema.encodeSync(TestIdTokenPayloadJson);
 const idTokenWithEmail = (() => {
-  const header = Buffer.from(JSON.stringify({ alg: "none" })).toString("base64url");
-  const payload = Buffer.from(JSON.stringify({ email: "theo@example.test" })).toString("base64url");
+  const header = Encoding.encodeBase64Url(encodeTestIdTokenHeader({ alg: "none" }));
+  const payload = Encoding.encodeBase64Url(
+    encodeTestIdTokenPayload({ email: "theo@example.test" }),
+  );
   return `${header}.${payload}.`;
 })();
 
-const makeTokenEndpointLayer = (requests: Array<RecordedTokenRequest>) =>
+const TestTokenResponseJson = Schema.fromJsonString(
+  Schema.Struct({
+    access_token: Schema.String,
+    refresh_token: Schema.String,
+    id_token: Schema.String,
+    expires_in: Schema.Number,
+    token_type: Schema.String,
+  }),
+);
+const encodeTestTokenResponse = Schema.encodeSync(TestTokenResponseJson);
+
+const makeTokenEndpointLayer = (
+  requests: Array<RecordedTokenRequest>,
+  options?: { readonly idToken?: string },
+) =>
   Layer.succeed(
     HttpClient.HttpClient,
     HttpClient.make((request) =>
@@ -42,11 +64,10 @@ const makeTokenEndpointLayer = (requests: Array<RecordedTokenRequest>) =>
         return HttpClientResponse.fromWeb(
           request,
           new Response(
-            // @effect-diagnostics-next-line preferSchemaOverJson:off - Test fixture matches Clerk's token endpoint response.
-            JSON.stringify({
+            encodeTestTokenResponse({
               access_token: "access-token-1",
               refresh_token: "refresh-token-1",
-              id_token: idTokenWithEmail,
+              id_token: options?.idToken ?? idTokenWithEmail,
               expires_in: 3600,
               token_type: "bearer",
             }),
@@ -110,10 +131,9 @@ it.layer(NodeServices.layer)("CliTokenManager.pasteCodeLogin", (it) => {
       // The verifier must hash to the challenge advertised in the authorize URL.
       const verifier = exchange.params.get("code_verifier");
       assert.isNotNull(verifier);
-      const digest = yield* Effect.promise(() =>
-        crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier!)),
-      );
-      assert.equal(Buffer.from(digest).toString("base64url"), request!.challenge);
+      const crypto = yield* Crypto.Crypto;
+      const digest = yield* crypto.digest("SHA-256", new TextEncoder().encode(verifier!));
+      assert.equal(Encoding.encodeBase64Url(digest), request!.challenge);
     }),
   );
 
@@ -133,6 +153,27 @@ it.layer(NodeServices.layer)("CliTokenManager.pasteCodeLogin", (it) => {
       assert.lengthOf(validationErrors, 1);
       assert.include(validationErrors[0], "different connect request");
       assert.instanceOf(result, PromptRejectedError);
+    }),
+  );
+
+  it.effect("ignores an id_token whose claims are not valid JSON", () =>
+    Effect.gen(function* () {
+      const requests: Array<RecordedTokenRequest> = [];
+      const malformedIdToken = `header.${Encoding.encodeBase64Url("not-json")}.signature`;
+
+      const { identity } = yield* CliTokenManager.pasteCodeLogin(
+        ({ authorizeUrl }: PasteCodePromptInput) => {
+          const request = readConnectAuthorizeRequest(new URL(authorizeUrl));
+          assert.isNotNull(request);
+          return Effect.succeed(`clerk-code-123.${request!.state}`);
+        },
+      ).pipe(
+        Effect.provide(makeTokenEndpointLayer(requests, { idToken: malformedIdToken })),
+        provideTestEnv,
+      );
+
+      assert.isNull(identity);
+      assert.lengthOf(requests, 1);
     }),
   );
 

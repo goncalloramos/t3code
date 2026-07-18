@@ -7,7 +7,12 @@ import * as Layer from "effect/Layer";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 
-import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import {
+  HostProcessArguments,
+  HostProcessEnvironment,
+  HostProcessExecutablePath,
+  HostProcessPlatform,
+} from "@t3tools/shared/hostProcess";
 
 import * as ProcessRunner from "../processRunner.ts";
 
@@ -122,11 +127,16 @@ export class BootServiceCommandError extends Schema.TaggedErrorClass<BootService
   "BootServiceCommandError",
   {
     step: Schema.String,
-    detail: Schema.String,
+    exitCode: Schema.optional(Schema.Number),
+    stdoutLength: Schema.optional(Schema.Number),
+    stderrLength: Schema.optional(Schema.Number),
+    cause: Schema.optional(Schema.Defect()),
   },
 ) {
   override get message(): string {
-    return `Background setup failed while ${this.step}: ${this.detail}`;
+    return this.exitCode === undefined
+      ? `Background setup failed while ${this.step}.`
+      : `Background setup failed while ${this.step} (exit code ${this.exitCode}).`;
   }
 }
 
@@ -172,20 +182,20 @@ export interface BootServiceHost {
   readonly cliEntryPath: string;
 }
 
-const defaultHost = (): BootServiceHost => ({
-  execPath: process.execPath,
-  // When running the packed CLI this is dist/bin.mjs; when stable (global
-  // install, repo checkout) the boot service runs this same artifact.
-  cliEntryPath: process.argv[1] ?? "",
-});
-
-export const make = Effect.fnUntraced(function* (input: {
+export const make = Effect.fn("cloud.boot_service.make")(function* (input: {
   readonly baseDir: string;
   readonly logsDir: string;
   readonly cliVersion: string;
   readonly host?: BootServiceHost;
 }) {
-  const host = input.host ?? defaultHost();
+  const hostExecPath = yield* HostProcessExecutablePath;
+  const hostArguments = yield* HostProcessArguments;
+  const host = input.host ?? {
+    execPath: hostExecPath,
+    // When running the packed CLI this is dist/bin.mjs; when stable (global
+    // install, repo checkout) the boot service runs this same artifact.
+    cliEntryPath: hostArguments[1] ?? "",
+  };
   const platform = yield* HostProcessPlatform;
   const env = yield* HostProcessEnvironment;
   const fs = yield* FileSystem.FileSystem;
@@ -211,22 +221,22 @@ export const make = Effect.fnUntraced(function* (input: {
     }
   });
 
-  const runStep = (
+  const runStep = Effect.fn("cloud.boot_service.run_step")(function* (
     step: string,
     command: string,
     args: ReadonlyArray<string>,
     options?: { readonly timeout?: Duration.Input },
-  ) =>
-    runner.run({ command, args, env: { ...env }, timeout: options?.timeout }).pipe(
-      Effect.mapError(
-        (cause) => new BootServiceCommandError({ step, detail: String(cause.message) }),
-      ),
+  ) {
+    return yield* runner.run({ command, args, env: { ...env }, timeout: options?.timeout }).pipe(
+      Effect.mapError((cause) => new BootServiceCommandError({ step, cause })),
       Effect.filterOrFail(
         (result) => result.code === 0,
         (result) =>
           new BootServiceCommandError({
             step,
-            detail: result.stderr.trim() || result.stdout.trim() || `exit code ${result.code}`,
+            exitCode: Number(result.code),
+            stdoutLength: result.stdout.length,
+            stderrLength: result.stderr.length,
           }),
       ),
       Effect.tapError((error) =>
@@ -240,6 +250,7 @@ export const make = Effect.fnUntraced(function* (input: {
         ),
       ),
     );
+  });
 
   /**
    * Ensures plannedEntryPath exists before the unit points at it. A stable
@@ -386,21 +397,22 @@ export const make = Effect.fnUntraced(function* (input: {
     if (platform !== "linux" || homeDir === "") {
       return { supported: false, installed: false, current: false, unitPath, logPath };
     }
-    const unit = yield* fs.readFileString(unitPath).pipe(
-      Effect.map((content): string | null => content),
-      Effect.orElseSucceed((): string | null => null),
-    );
-    if (unit === null) {
+    const unitExists = yield* fs.exists(unitPath);
+    if (!unitExists) {
       return { supported: true, installed: false, current: false, unitPath, logPath };
     }
+    const unit = yield* fs.readFileString(unitPath);
     // A unit is current only if it matches what install would write now (an
     // older CLI wrote a different runtime/node path) AND the entry point it
     // references still exists (a pinned runtime under ~/.t3 can be deleted to
     // reclaim space). Either mismatch makes connect offer a repair.
-    const entryExists = yield* fs.exists(plannedEntryPath).pipe(Effect.orElseSucceed(() => false));
+    const entryExists = yield* fs.exists(plannedEntryPath);
     const current = unit === renderBootServiceUnit(plan) && entryExists;
     return { supported: true, installed: true, current, unitPath, logPath };
-  }).pipe(Effect.withSpan("cloud.boot_service.status"));
+  }).pipe(
+    Effect.mapError((cause) => new BootServiceInstallError({ cause })),
+    Effect.withSpan("cloud.boot_service.status"),
+  );
 
   return BootService.of({ install, uninstall, status });
 });
@@ -410,4 +422,4 @@ export const layer = (input: {
   readonly logsDir: string;
   readonly cliVersion: string;
   readonly host?: BootServiceHost;
-}) => Layer.effect(BootService, make(input)).pipe(Layer.provide(ProcessRunner.layer));
+}) => Layer.effect(BootService, make(input));

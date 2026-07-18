@@ -1,16 +1,18 @@
-// @effect-diagnostics nodeBuiltinImport:off - Tests stage fixture directories on the real filesystem.
-import * as NodeFS from "node:fs";
-import * as NodeOS from "node:os";
-import * as NodePath from "node:path";
-
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as FileSystem from "effect/FileSystem";
 import * as Layer from "effect/Layer";
+import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
 import * as ChildProcessSpawner from "effect/unstable/process/ChildProcessSpawner";
 
-import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
+import {
+  HostProcessArguments,
+  HostProcessEnvironment,
+  HostProcessExecutablePath,
+  HostProcessPlatform,
+} from "@t3tools/shared/hostProcess";
 
 import * as ProcessRunner from "../processRunner.ts";
 import * as BootService from "./bootService.ts";
@@ -59,19 +61,25 @@ const provideHostRefs = (home: string, platform: NodeJS.Platform = "linux") =>
     ),
   );
 
-const makeTestDirs = () => {
-  const root = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-boot-service-test-"));
+const makeTestContext = Effect.fn("test.makeTestContext")(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const root = yield* fs.makeTempDirectoryScoped({ prefix: "t3-boot-service-test-" });
   // A real file for the stable-entry cases so status can confirm the entry
   // point exists.
-  const stableEntry = NodePath.join(root, "bin.mjs");
-  NodeFS.writeFileSync(stableEntry, "#!/usr/bin/env node\n");
+  const stableEntry = path.join(root, "bin.mjs");
+  yield* fs.writeFileString(stableEntry, "#!/usr/bin/env node\n");
   return {
-    home: root,
-    baseDir: NodePath.join(root, ".t3"),
-    logsDir: NodePath.join(root, ".t3", "userdata", "logs"),
-    stableEntry,
+    fs,
+    path,
+    dirs: {
+      home: root,
+      baseDir: path.join(root, ".t3"),
+      logsDir: path.join(root, ".t3", "userdata", "logs"),
+      stableEntry,
+    },
   };
-};
+});
 
 it("renders a systemd unit with absolute paths and append-mode logging", () => {
   const unit = BootService.renderBootServiceUnit({
@@ -153,7 +161,7 @@ it("flags package-manager cache entry points as ephemeral", () => {
 it.layer(NodeServices.layer)("BootService", (it) => {
   it.effect("installs the unit, enables the service, and enables linger", () =>
     Effect.gen(function* () {
-      const dirs = makeTestDirs();
+      const { dirs, fs, path } = yield* makeTestContext();
       const commands: Array<RecordedCommand> = [];
       const service = yield* BootService.make({
         baseDir: dirs.baseDir,
@@ -178,8 +186,8 @@ it.layer(NodeServices.layer)("BootService", (it) => {
         ],
       );
 
-      const unitPath = NodePath.join(dirs.home, ".config", "systemd", "user", "t3code.service");
-      const unit = NodeFS.readFileSync(unitPath, "utf8");
+      const unitPath = path.join(dirs.home, ".config", "systemd", "user", "t3code.service");
+      const unit = yield* fs.readFileString(unitPath);
       assert.include(unit, `ExecStart=/usr/local/bin/node ${dirs.stableEntry} serve`);
       assert.include(unit, `Environment=T3CODE_HOME=${dirs.baseDir}`);
 
@@ -190,7 +198,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
 
       const removed = yield* service.uninstall;
       assert.isTrue(removed);
-      assert.isFalse(NodeFS.existsSync(unitPath));
+      assert.isFalse(yield* fs.exists(unitPath));
       const statusAfter = yield* service.status;
       assert.isFalse(statusAfter.installed);
       const removedAgain = yield* service.uninstall;
@@ -200,7 +208,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
 
   it.effect("pins a runtime via npm install when running from the npx cache", () =>
     Effect.gen(function* () {
-      const dirs = makeTestDirs();
+      const { dirs, fs, path } = yield* makeTestContext();
       const commands: Array<RecordedCommand> = [];
       const service = yield* BootService.make({
         baseDir: dirs.baseDir,
@@ -211,23 +219,44 @@ it.layer(NodeServices.layer)("BootService", (it) => {
 
       const plan = yield* service.install;
 
-      const runtimeDir = NodePath.join(dirs.baseDir, "runtime", "versions", "0.0.27");
+      const runtimeDir = path.join(dirs.baseDir, "runtime", "versions", "0.0.27");
       assert.equal(
         plan.t3EntryPath,
-        NodePath.join(runtimeDir, "node_modules", "t3", "dist", "bin.mjs"),
+        path.join(runtimeDir, "node_modules", "t3", "dist", "bin.mjs"),
       );
       assert.deepEqual(commands[0], {
         command: "npm",
         args: ["install", "--prefix", runtimeDir, "--no-fund", "--no-audit", "t3@0.0.27"],
       });
       // Success is recorded via a sentinel so interrupted installs re-run.
-      assert.isTrue(NodeFS.existsSync(NodePath.join(runtimeDir, ".install-complete")));
+      assert.isTrue(yield* fs.exists(path.join(runtimeDir, ".install-complete")));
+    }),
+  );
+
+  it.effect("reads executable metadata from host process references", () =>
+    Effect.gen(function* () {
+      const { dirs } = yield* makeTestContext();
+      const commands: Array<RecordedCommand> = [];
+      const service = yield* BootService.make({
+        baseDir: dirs.baseDir,
+        logsDir: dirs.logsDir,
+        cliVersion: "0.0.27",
+      }).pipe(
+        Effect.provide(makeRecordingRunnerLayer(commands)),
+        provideHostRefs(dirs.home),
+        Effect.provideService(HostProcessExecutablePath, "/opt/node/bin/node"),
+        Effect.provideService(HostProcessArguments, ["/opt/node/bin/node", dirs.stableEntry]),
+      );
+
+      const plan = yield* service.install;
+      assert.equal(plan.nodePath, "/opt/node/bin/node");
+      assert.equal(plan.t3EntryPath, dirs.stableEntry);
     }),
   );
 
   it.effect("cleans up and fails when the pinned runtime install fails", () =>
     Effect.gen(function* () {
-      const dirs = makeTestDirs();
+      const { dirs, fs, path } = yield* makeTestContext();
       const commands: Array<RecordedCommand> = [];
       const service = yield* BootService.make({
         baseDir: dirs.baseDir,
@@ -241,16 +270,16 @@ it.layer(NodeServices.layer)("BootService", (it) => {
 
       const error = yield* service.install.pipe(Effect.flip);
       assert.isTrue(isCommandError(error));
-      const runtimeDir = NodePath.join(dirs.baseDir, "runtime", "versions", "0.0.27");
+      const runtimeDir = path.join(dirs.baseDir, "runtime", "versions", "0.0.27");
       // The half-installed tree must not be reused by the next attempt.
-      assert.isFalse(NodeFS.existsSync(runtimeDir));
-      assert.isFalse(NodeFS.existsSync(NodePath.join(runtimeDir, ".install-complete")));
+      assert.isFalse(yield* fs.exists(runtimeDir));
+      assert.isFalse(yield* fs.exists(path.join(runtimeDir, ".install-complete")));
     }),
   );
 
   it.effect("reports an installed-but-stale unit so connect can offer a repair", () =>
     Effect.gen(function* () {
-      const dirs = makeTestDirs();
+      const { dirs, fs, path } = yield* makeTestContext();
       const commands: Array<RecordedCommand> = [];
       const service = yield* BootService.make({
         baseDir: dirs.baseDir,
@@ -259,10 +288,10 @@ it.layer(NodeServices.layer)("BootService", (it) => {
         host: makeHost(dirs.stableEntry),
       }).pipe(Effect.provide(makeRecordingRunnerLayer(commands)), provideHostRefs(dirs.home));
 
-      const unitDir = NodePath.join(dirs.home, ".config", "systemd", "user");
-      NodeFS.mkdirSync(unitDir, { recursive: true });
-      NodeFS.writeFileSync(
-        NodePath.join(unitDir, "t3code.service"),
+      const unitDir = path.join(dirs.home, ".config", "systemd", "user");
+      yield* fs.makeDirectory(unitDir, { recursive: true });
+      yield* fs.writeFileString(
+        path.join(unitDir, "t3code.service"),
         "[Service]\nExecStart=/old/node /old/t3 serve\n",
       );
 
@@ -275,7 +304,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
 
   it.effect("reports a current unit as stale when its entry point is gone", () =>
     Effect.gen(function* () {
-      const dirs = makeTestDirs();
+      const { dirs, fs } = yield* makeTestContext();
       const commands: Array<RecordedCommand> = [];
       const service = yield* BootService.make({
         baseDir: dirs.baseDir,
@@ -289,7 +318,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
 
       // The pinned runtime (or global bin) was deleted to reclaim space; the
       // unit still matches byte-for-byte but would crashloop at boot.
-      NodeFS.rmSync(dirs.stableEntry);
+      yield* fs.remove(dirs.stableEntry);
       const status = yield* service.status;
       assert.isTrue(status.installed);
       assert.isFalse(status.current);
@@ -298,7 +327,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
 
   it.effect("fails on non-Linux platforms without touching the filesystem", () =>
     Effect.gen(function* () {
-      const dirs = makeTestDirs();
+      const { dirs, fs, path } = yield* makeTestContext();
       const commands: Array<RecordedCommand> = [];
       const service = yield* BootService.make({
         baseDir: dirs.baseDir,
@@ -314,7 +343,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
       assert.isTrue(isUnsupportedError(error));
       assert.lengthOf(commands, 0);
       assert.isFalse(
-        NodeFS.existsSync(NodePath.join(dirs.home, ".config", "systemd", "user", "t3code.service")),
+        yield* fs.exists(path.join(dirs.home, ".config", "systemd", "user", "t3code.service")),
       );
 
       const status = yield* service.status;
@@ -325,7 +354,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
 
   it.effect("removes the unit file when an activation step fails", () =>
     Effect.gen(function* () {
-      const dirs = makeTestDirs();
+      const { dirs, fs, path } = yield* makeTestContext();
       const commands: Array<RecordedCommand> = [];
       const service = yield* BootService.make({
         baseDir: dirs.baseDir,
@@ -342,7 +371,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
       // A leftover unit would make the next connect report "already set up"
       // even though linger never happened.
       assert.isFalse(
-        NodeFS.existsSync(NodePath.join(dirs.home, ".config", "systemd", "user", "t3code.service")),
+        yield* fs.exists(path.join(dirs.home, ".config", "systemd", "user", "t3code.service")),
       );
       const status = yield* service.status;
       assert.isFalse(status.installed);
@@ -351,7 +380,7 @@ it.layer(NodeServices.layer)("BootService", (it) => {
 
   it.effect("appends failed steps to the boot-service log", () =>
     Effect.gen(function* () {
-      const dirs = makeTestDirs();
+      const { dirs, fs, path } = yield* makeTestContext();
       const commands: Array<RecordedCommand> = [];
       const service = yield* BootService.make({
         baseDir: dirs.baseDir,
@@ -365,11 +394,13 @@ it.layer(NodeServices.layer)("BootService", (it) => {
 
       const error = yield* service.install.pipe(Effect.flip);
       assert.isTrue(isCommandError(error));
-      assert.include(error.message, "systemctl exploded");
+      if (!isCommandError(error)) return;
+      assert.equal(error.exitCode, 1);
+      assert.equal(error.stderrLength, "systemctl exploded".length);
 
-      const logPath = NodePath.join(dirs.logsDir, "boot-service.log");
-      assert.isTrue(NodeFS.existsSync(logPath));
-      assert.include(NodeFS.readFileSync(logPath, "utf8"), "systemctl exploded");
+      const logPath = path.join(dirs.logsDir, "boot-service.log");
+      assert.isTrue(yield* fs.exists(logPath));
+      assert.include(yield* fs.readFileString(logPath), "exit code 1");
     }),
   );
 });
