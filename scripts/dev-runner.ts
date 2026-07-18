@@ -281,11 +281,7 @@ export function createDevRunnerEnv({
     }
 
     if (!isDesktopMode) {
-      if (browser === true) {
-        output.T3CODE_NO_BROWSER = "0";
-      } else if (!output.T3CODE_NO_BROWSER?.trim()) {
-        output.T3CODE_NO_BROWSER = "1";
-      }
+      output.T3CODE_NO_BROWSER = browser === true ? "0" : "1";
     }
 
     if (autoBootstrapProjectFromCwd !== undefined) {
