@@ -1426,6 +1426,11 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
+      // Electron's executable arrives with a linker-generated ad-hoc signature.
+      // Renaming it for the custom product invalidates that signature, so local
+      // builds must explicitly re-sign the completed bundle. A distribution
+      // build continues to discover and use the configured Developer ID.
+      ...(!signed ? { identity: "-", hardenedRuntime: false } : {}),
       protocols: [
         {
           name: "T3 Code",
