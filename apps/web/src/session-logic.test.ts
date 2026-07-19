@@ -691,6 +691,35 @@ describe("workEntryIndicatesToolFailure", () => {
 });
 
 describe("deriveWorkLogEntries", () => {
+  it("preserves structured image output from completed tools", () => {
+    const [entry] = deriveWorkLogEntries([
+      makeActivity({
+        id: "image-tool-complete",
+        kind: "tool.completed",
+        summary: "Viewed image",
+        payload: {
+          itemType: "dynamic_tool_call",
+          data: {
+            item: {
+              type: "dynamicToolCall",
+              contentItems: [
+                { type: "inputText", text: "preview" },
+                { type: "inputImage", imageUrl: "data:image/png;base64,aW1hZ2U=" },
+              ],
+            },
+          },
+        },
+      }),
+    ]);
+
+    expect(entry?.images).toEqual([
+      {
+        source: "data:image/png;base64,aW1hZ2U=",
+        alt: "Viewed image",
+      },
+    ]);
+  });
+
   it("omits tool started entries and keeps completed entries", () => {
     const activities: OrchestrationThreadActivity[] = [
       makeActivity({

@@ -40,6 +40,7 @@ import rehypeSanitize, { defaultSchema } from "rehype-sanitize";
 import remarkBreaks from "remark-breaks";
 import remarkGfm from "remark-gfm";
 import { renderSkillInlineMarkdownChildren } from "./chat/SkillInlineText";
+import { ChatImage } from "./chat/ChatImage";
 import { CHAT_FILE_TAG_CHIP_CLASS_NAME, FileTagChipContent } from "./chat/FileTagChip";
 import { PierreEntryIcon } from "./chat/PierreEntryIcon";
 import { hasSpecificPierreIconForFileName, syntheticFileNameForLanguageId } from "../pierre-icons";
@@ -83,6 +84,7 @@ import {
   openUrlInPreview,
   BrowserPreviewUnavailableError,
 } from "../browser/openFileInPreview";
+import { isSafeMarkdownDataImageUrl } from "../chatImageSources";
 
 class CodeHighlightErrorBoundary extends React.Component<
   { fallback: ReactNode; children: ReactNode },
@@ -116,6 +118,31 @@ interface ChatMarkdownProps {
   /** Treat single newlines as hard breaks — chat-style user input. */
   lineBreaks?: boolean;
 }
+
+interface MarkdownImageContextValue {
+  readonly cwd: string | undefined;
+  readonly threadRef: ScopedThreadRef | undefined;
+}
+
+const MarkdownImageContext = React.createContext<MarkdownImageContextValue>({
+  cwd: undefined,
+  threadRef: undefined,
+});
+
+const MarkdownChatImage: NonNullable<Components["img"]> = ({ src, alt }) => {
+  const { cwd, threadRef } = use(MarkdownImageContext);
+  return (
+    <span className="my-3 block max-w-full overflow-hidden rounded-xl border border-border/80 bg-background/70 p-1.5">
+      <ChatImage
+        source={src ?? ""}
+        alt={alt?.trim() || "Chat image"}
+        cwd={cwd}
+        threadRef={threadRef}
+        className="mx-auto rounded-lg"
+      />
+    </span>
+  );
+};
 
 const EMPTY_MARKDOWN_SKILLS: ReadonlyArray<Pick<ServerProviderSkill, "name" | "displayName">> = [];
 
@@ -162,6 +189,7 @@ const CHAT_MARKDOWN_SANITIZE_SCHEMA = {
   protocols: {
     ...defaultSchema.protocols,
     href: [...(defaultSchema.protocols?.href ?? []), "file"],
+    src: [...(defaultSchema.protocols?.src ?? []), "data", "file"],
   },
 } satisfies Parameters<typeof rehypeSanitize>[0];
 
@@ -1292,8 +1320,10 @@ function ChatMarkdown({
     return buildFileLinkParentSuffixByPath(filePaths);
   }, [markdownFileLinkMetaByHref]);
   const markdownUrlTransform = useCallback((href: string) => {
+    if (isSafeMarkdownDataImageUrl(href)) return href;
     return rewriteMarkdownFileUriHref(href) ?? defaultUrlTransform(href);
   }, []);
+  const markdownImageContext = useMemo(() => ({ cwd, threadRef }), [cwd, threadRef]);
   // Re-emit highlighted content as markdown so copying out of the rendered
   // view keeps links, emphasis, lists, and code fences intact.
   const handleCopy = useCallback((event: ReactClipboardEvent<HTMLDivElement>) => {
@@ -1389,6 +1419,7 @@ function ChatMarkdown({
           />
         );
       },
+      img: MarkdownChatImage,
       a({ node, href, children, ...props }) {
         const normalizedHref = href ? normalizeMarkdownLinkHrefKey(href) : "";
         const fileLinkMeta = normalizedHref ? markdownFileLinkMetaByHref.get(normalizedHref) : null;
@@ -1562,16 +1593,18 @@ function ChatMarkdown({
       )}
       onCopy={handleCopy}
     >
-      <ReactMarkdown
-        remarkPlugins={
-          lineBreaks ? CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS : CHAT_MARKDOWN_REMARK_PLUGINS
-        }
-        rehypePlugins={CHAT_MARKDOWN_REHYPE_PLUGINS}
-        components={markdownComponents}
-        urlTransform={markdownUrlTransform}
-      >
-        {text}
-      </ReactMarkdown>
+      <MarkdownImageContext value={markdownImageContext}>
+        <ReactMarkdown
+          remarkPlugins={
+            lineBreaks ? CHAT_MARKDOWN_REMARK_PLUGINS_WITH_BREAKS : CHAT_MARKDOWN_REMARK_PLUGINS
+          }
+          rehypePlugins={CHAT_MARKDOWN_REHYPE_PLUGINS}
+          components={markdownComponents}
+          urlTransform={markdownUrlTransform}
+        >
+          {text}
+        </ReactMarkdown>
+      </MarkdownImageContext>
     </div>
   );
 }

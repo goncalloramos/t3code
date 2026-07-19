@@ -39,6 +39,7 @@ import {
   resolveFileDiffPath,
 } from "../../lib/diffRendering";
 import ChatMarkdown from "../ChatMarkdown";
+import { ChatImage } from "./ChatImage";
 import {
   BotIcon,
   CheckIcon,
@@ -1117,7 +1118,7 @@ const WorkGroupSection = memo(function WorkGroupSection({
 }: {
   groupedEntries: Extract<MessagesTimelineRow, { kind: "work" }>["groupedEntries"];
 }) {
-  const { workspaceRoot } = use(TimelineRowCtx);
+  const { markdownCwd, onImageExpand, threadRef, workspaceRoot } = use(TimelineRowCtx);
   const nonEmptyEntries = useMemo(
     () => groupedEntries.filter((entry) => !workEntryIndicatesToolNeutralStatus(entry)),
     [groupedEntries],
@@ -1140,11 +1141,33 @@ const WorkGroupSection = memo(function WorkGroupSection({
       )}
       <div className="space-y-px">
         {nonEmptyEntries.map((workEntry) => (
-          <SimpleWorkEntryRow
-            key={workEntry.id}
-            workEntry={workEntry}
-            workspaceRoot={workspaceRoot}
-          />
+          <Fragment key={workEntry.id}>
+            <SimpleWorkEntryRow workEntry={workEntry} workspaceRoot={workspaceRoot} />
+            {(workEntry.images?.length ?? 0) > 0 ? (
+              <div className="grid max-w-2xl grid-cols-1 gap-2 py-1 pl-7 sm:grid-cols-2">
+                {workEntry.images?.map((image) => (
+                  <div
+                    key={image.source}
+                    className="overflow-hidden rounded-xl border border-border/80 bg-background/70 p-1.5"
+                  >
+                    <ChatImage
+                      source={image.source}
+                      alt={image.alt}
+                      cwd={markdownCwd}
+                      threadRef={threadRef ?? undefined}
+                      className="mx-auto rounded-lg"
+                      onExpand={(source) =>
+                        onImageExpand({
+                          images: [{ src: source, name: image.alt }],
+                          index: 0,
+                        })
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </Fragment>
         ))}
       </div>
     </section>

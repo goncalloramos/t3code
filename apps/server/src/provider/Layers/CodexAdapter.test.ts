@@ -556,6 +556,56 @@ lifecycleLayer("CodexAdapterLive lifecycle", (it) => {
     }),
   );
 
+  it.effect("preserves structured image content from completed dynamic tools", () =>
+    Effect.gen(function* () {
+      const { adapter, runtime } = yield* startLifecycleRuntime();
+      const firstEventFiber = yield* Stream.runHead(adapter.streamEvents).pipe(Effect.forkChild);
+
+      yield* runtime.emit({
+        id: asEventId("evt-image-tool-complete"),
+        kind: "notification",
+        provider: ProviderDriverKind.make("codex"),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        method: "item/completed",
+        threadId: asThreadId("thread-1"),
+        turnId: asTurnId("turn-1"),
+        itemId: asItemId("tool-image-1"),
+        payload: {
+          completedAtMs: 1_778_000_000_000,
+          threadId: "thread-1",
+          turnId: "turn-1",
+          item: {
+            type: "dynamicToolCall",
+            id: "tool-image-1",
+            tool: "view_image",
+            arguments: {},
+            contentItems: [
+              { type: "inputText", text: "preview" },
+              { type: "inputImage", imageUrl: "data:image/png;base64,aW1hZ2U=" },
+            ],
+            durationMs: 25,
+            status: "completed",
+            success: true,
+          },
+        },
+      });
+      const firstEvent = yield* Fiber.join(firstEventFiber);
+
+      NodeAssert.equal(firstEvent._tag, "Some");
+      if (firstEvent._tag !== "Some" || firstEvent.value.type !== "item.completed") {
+        return;
+      }
+      NodeAssert.equal(firstEvent.value.payload.itemType, "dynamic_tool_call");
+      NodeAssert.deepStrictEqual(
+        (firstEvent.value.payload.data as { item?: { contentItems?: unknown } }).item?.contentItems,
+        [
+          { type: "inputText", text: "preview" },
+          { type: "inputImage", imageUrl: "data:image/png;base64,aW1hZ2U=" },
+        ],
+      );
+    }),
+  );
+
   it.effect("maps completed plan items to canonical proposed-plan completion events", () =>
     Effect.gen(function* () {
       const { adapter, runtime } = yield* startLifecycleRuntime();

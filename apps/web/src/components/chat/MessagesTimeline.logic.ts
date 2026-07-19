@@ -313,7 +313,8 @@ function deriveTurnFolds(input: {
     }
     const hiddenEntryIds = new Set<string>();
     for (const entry of group.entries) {
-      if (entry.id !== group.terminalEntry?.id) {
+      const hasPersistentImages = entry.kind === "work" && (entry.entry.images?.length ?? 0) > 0;
+      if (entry.id !== group.terminalEntry?.id && !hasPersistentImages) {
         hiddenEntryIds.add(entry.id);
       }
     }
