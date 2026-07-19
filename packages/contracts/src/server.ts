@@ -153,6 +153,29 @@ export const ServerProviderUpdateState = Schema.Struct({
 });
 export type ServerProviderUpdateState = typeof ServerProviderUpdateState.Type;
 
+export const ServerProviderRateLimitWindow = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  usedPercent: Schema.Number,
+  windowDurationMins: Schema.NullOr(NonNegativeInt),
+  resetsAt: Schema.NullOr(NonNegativeInt),
+});
+export type ServerProviderRateLimitWindow = typeof ServerProviderRateLimitWindow.Type;
+
+export const ServerProviderRateLimitBucket = Schema.Struct({
+  id: TrimmedNonEmptyString,
+  name: Schema.NullOr(TrimmedNonEmptyString),
+  windows: Schema.Array(ServerProviderRateLimitWindow),
+});
+export type ServerProviderRateLimitBucket = typeof ServerProviderRateLimitBucket.Type;
+
+export const ServerProviderRateLimits = Schema.Struct({
+  status: Schema.Literals(["loading", "ready", "unavailable", "authentication-error"]),
+  buckets: Schema.Array(ServerProviderRateLimitBucket),
+  updatedAt: Schema.NullOr(IsoDateTime),
+  message: Schema.NullOr(TrimmedNonEmptyString),
+});
+export type ServerProviderRateLimits = typeof ServerProviderRateLimits.Type;
+
 export const ServerProvider = Schema.Struct({
   // Routing key for the configured instance this snapshot represents. This
   // is the only stable identity consumers may use for provider routing.
@@ -189,6 +212,8 @@ export const ServerProvider = Schema.Struct({
   skills: Schema.Array(ServerProviderSkill).pipe(Schema.withDecodingDefault(Effect.succeed([]))),
   versionAdvisory: Schema.optionalKey(ServerProviderVersionAdvisory),
   updateState: Schema.optionalKey(ServerProviderUpdateState),
+  // Provider-aware usage projection. Currently populated only by Codex.
+  rateLimits: Schema.optionalKey(ServerProviderRateLimits),
 });
 export type ServerProvider = typeof ServerProvider.Type;
 

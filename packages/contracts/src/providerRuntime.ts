@@ -534,8 +534,32 @@ const AccountUpdatedPayload = Schema.Struct({
 });
 export type AccountUpdatedPayload = typeof AccountUpdatedPayload.Type;
 
+export const CodexRateLimitWindow = Schema.Struct({
+  usedPercent: Schema.Number,
+  windowDurationMins: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+  resetsAt: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+});
+export type CodexRateLimitWindow = typeof CodexRateLimitWindow.Type;
+
+export const CodexRateLimitSnapshot = Schema.Struct({
+  limitId: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  limitName: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  primary: Schema.optionalKey(Schema.NullOr(CodexRateLimitWindow)),
+  secondary: Schema.optionalKey(Schema.NullOr(CodexRateLimitWindow)),
+});
+export type CodexRateLimitSnapshot = typeof CodexRateLimitSnapshot.Type;
+
+export const CodexRateLimitsSnapshot = Schema.Struct({
+  rateLimits: CodexRateLimitSnapshot,
+  rateLimitsByLimitId: Schema.optionalKey(
+    Schema.NullOr(Schema.Record(Schema.String, CodexRateLimitSnapshot)),
+  ),
+});
+export type CodexRateLimitsSnapshot = typeof CodexRateLimitsSnapshot.Type;
+
 const AccountRateLimitsUpdatedPayload = Schema.Struct({
   rateLimits: Schema.Unknown,
+  codexRateLimits: Schema.optional(CodexRateLimitSnapshot),
 });
 export type AccountRateLimitsUpdatedPayload = typeof AccountRateLimitsUpdatedPayload.Type;
 

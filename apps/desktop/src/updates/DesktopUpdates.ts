@@ -224,7 +224,11 @@ function getAutoUpdateDisabledReason(args: {
   appImage?: string | undefined;
   disabledByEnv: boolean;
   hasUpdateFeedConfig: boolean;
+  customBuild: boolean;
 }): string | null {
+  if (args.customBuild) {
+    return "Automatic updates are disabled for the T3 Code Custom build.";
+  }
   if (!args.hasUpdateFeedConfig) {
     return "Automatic updates are not available because no update feed is configured.";
   }
@@ -309,6 +313,7 @@ export const make = Effect.gen(function* () {
         appImage: Option.getOrUndefined(config.appImagePath),
         disabledByEnv: config.disableAutoUpdate,
         hasUpdateFeedConfig: hasFeedConfig,
+        customBuild: !config.mockUpdates,
       }),
     );
   });

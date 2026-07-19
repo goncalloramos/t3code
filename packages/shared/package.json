@@ -183,6 +183,10 @@
       "types": "./src/hostProcess.ts",
       "import": "./src/hostProcess.ts"
     },
+    "./codexRateLimits": {
+      "types": "./src/codexRateLimits.ts",
+      "import": "./src/codexRateLimits.ts"
+    },
     "./httpReadiness": {
       "types": "./src/httpReadiness.ts",
       "import": "./src/httpReadiness.ts"

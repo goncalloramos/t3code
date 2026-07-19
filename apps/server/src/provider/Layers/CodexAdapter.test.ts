@@ -115,6 +115,13 @@ class FakeCodexRuntime implements CodexSessionRuntimeShape {
 
   public readonly closeImpl = vi.fn(() => Promise.resolve(undefined));
 
+  public readonly readAccountRateLimits = Effect.succeed({
+    rateLimits: {
+      limitId: "codex",
+      primary: { usedPercent: 27, windowDurationMins: 300, resetsAt: 1_800_000_000 },
+    },
+  });
+
   readonly options: CodexSessionRuntimeOptions;
 
   constructor(options: CodexSessionRuntimeOptions) {

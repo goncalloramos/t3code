@@ -134,6 +134,22 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     return yield* applySnapshot(nextSettings, { forceRefresh: true });
   });
 
+  const updateSnapshot = Effect.fn("updateProviderSnapshot")(function* (
+    update: (snapshot: ServerProvider) => ServerProvider,
+  ) {
+    const changedSnapshot = yield* Ref.modify(snapshotStateRef, (state) => {
+      const next = update(state.snapshot);
+      return Equal.equals(state.snapshot, next)
+        ? [null, state]
+        : [next, { ...state, snapshot: next }];
+    });
+    if (changedSnapshot === null) {
+      return (yield* Ref.get(snapshotStateRef)).snapshot;
+    }
+    yield* PubSub.publish(changesPubSub, changedSnapshot);
+    return changedSnapshot;
+  });
+
   yield* Stream.runForEach(input.streamSettings, (nextSettings) =>
     Effect.asVoid(applySnapshot(nextSettings)),
   ).pipe(Effect.forkScoped);
@@ -154,6 +170,7 @@ export const makeManagedServerProvider = Effect.fn("makeManagedServerProvider")(
     maintenanceCapabilities: input.maintenanceCapabilities,
     getSnapshot: Ref.get(snapshotStateRef).pipe(Effect.map((state) => state.snapshot)),
     refresh: refreshSnapshot().pipe(Effect.tapError(Effect.logError), Effect.orDie),
+    updateSnapshot,
     get streamChanges() {
       return Stream.fromPubSub(changesPubSub);
     },
