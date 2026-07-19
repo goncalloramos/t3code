@@ -39,6 +39,26 @@ describe("branding", () => {
     expect(branding.APP_DISPLAY_NAME).toBe("T3 Code (Nightly)");
   });
 
+  it("uses the custom stage label from stable custom desktop builds", async () => {
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      value: {
+        desktopBridge: {
+          getAppBranding: () => ({
+            baseName: "T3 Code Custom",
+            stageLabel: "Custom",
+            displayName: "T3 Code Custom",
+          }),
+        },
+      },
+    });
+
+    const branding = await import("./branding");
+
+    expect(branding.APP_STAGE_LABEL).toBe("Custom");
+    expect(branding.APP_DISPLAY_NAME).toBe("T3 Code Custom");
+  });
+
   it("normalizes hosted app channel metadata", async () => {
     vi.stubEnv("VITE_HOSTED_APP_CHANNEL", "nightly");
 

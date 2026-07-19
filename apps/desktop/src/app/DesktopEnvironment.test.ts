@@ -51,6 +51,11 @@ describe("DesktopEnvironment", () => {
       );
 
       assert.equal(environment.isDevelopment, true);
+      assert.deepEqual(environment.branding, {
+        baseName: "T3 Code Custom",
+        stageLabel: "Dev",
+        displayName: "T3 Code Custom (Dev)",
+      });
       assert.equal(environment.appDataDirectory, "/Users/alice/Library/Application Support");
       assert.equal(environment.baseDir, "/tmp/t3");
       assert.equal(environment.stateDir, "/tmp/t3/dev");
@@ -88,6 +93,11 @@ describe("DesktopEnvironment", () => {
       );
 
       assert.equal(environment.isDevelopment, false);
+      assert.deepEqual(environment.branding, {
+        baseName: "T3 Code Custom",
+        stageLabel: "Custom",
+        displayName: "T3 Code Custom",
+      });
       assert.equal(environment.stateDir, "/tmp/t3/userdata");
       assert.equal(environment.logDir, "/tmp/t3/userdata/logs");
       assert.equal(environment.browserArtifactsDir, "/tmp/t3/userdata/browser-artifacts");

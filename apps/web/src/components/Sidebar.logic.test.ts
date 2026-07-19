@@ -57,6 +57,15 @@ describe("resolveSidebarStageBadgeLabel", () => {
     ).toBe("Alpha");
   });
 
+  it("keeps the custom desktop label for stable primary server versions", () => {
+    expect(
+      resolveSidebarStageBadgeLabel({
+        primaryServerVersion: "0.0.28",
+        fallbackStageLabel: "Custom",
+      }),
+    ).toBe("Custom");
+  });
+
   it("returns the fallback label when the primary server version is missing", () => {
     expect(
       resolveSidebarStageBadgeLabel({
