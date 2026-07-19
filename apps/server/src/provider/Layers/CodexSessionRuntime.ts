@@ -130,6 +130,10 @@ export interface CodexThreadSnapshot {
 
 export interface CodexSessionRuntimeShape {
   readonly start: () => Effect.Effect<ProviderSession, CodexSessionRuntimeError>;
+  readonly readAccountRateLimits: Effect.Effect<
+    EffectCodexSchema.V2GetAccountRateLimitsResponse,
+    CodexSessionRuntimeError
+  >;
   readonly getSession: Effect.Effect<ProviderSession>;
   readonly sendTurn: (
     input: CodexSessionRuntimeSendTurnInput,
@@ -1259,6 +1263,7 @@ export const makeCodexSessionRuntime = (
 
     return {
       start,
+      readAccountRateLimits: client.request("account/rateLimits/read", undefined),
       getSession: Ref.get(sessionRef),
       sendTurn: (input) =>
         Effect.gen(function* () {

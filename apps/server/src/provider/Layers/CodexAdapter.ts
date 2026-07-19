@@ -8,6 +8,8 @@
  * @module CodexAdapterLive
  */
 import {
+  type CodexRateLimitSnapshot,
+  type CodexRateLimitsSnapshot,
   type CanonicalItemType,
   type CanonicalRequestType,
   type CodexSettings,
@@ -82,6 +84,9 @@ export interface CodexAdapterLiveOptions {
   >;
   readonly nativeEventLogPath?: string;
   readonly nativeEventLogger?: EventNdjsonLogger;
+  readonly onRateLimitsSnapshot?: (snapshot: CodexRateLimitsSnapshot) => Effect.Effect<void, never>;
+  readonly onRateLimitsUpdate?: (snapshot: CodexRateLimitSnapshot) => Effect.Effect<void, never>;
+  readonly onRateLimitsError?: (error: unknown) => Effect.Effect<void, never>;
 }
 
 interface CodexAdapterSessionContext {
@@ -1117,7 +1122,11 @@ function mapToRuntimeEvents(
   }
 
   if (event.method === "account/rateLimits/updated") {
-    if (!readPayload(EffectCodexSchema.V2AccountRateLimitsUpdatedNotification, event.payload)) {
+    const payload = readPayload(
+      EffectCodexSchema.V2AccountRateLimitsUpdatedNotification,
+      event.payload,
+    );
+    if (!payload) {
       return [];
     }
     return [
@@ -1125,7 +1134,8 @@ function mapToRuntimeEvents(
         type: "account.rate-limits.updated",
         ...runtimeEventBase(event, canonicalThreadId),
         payload: {
-          rateLimits: event.payload ?? {},
+          rateLimits: payload.rateLimits,
+          codexRateLimits: payload.rateLimits,
         },
       },
     ];
@@ -1441,6 +1451,15 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
         const eventFiber = yield* Stream.runForEach(runtime.events, (event) =>
           Effect.gen(function* () {
             yield* writeNativeEvent(event);
+            if (event.method === "account/rateLimits/updated") {
+              const payload = readPayload(
+                EffectCodexSchema.V2AccountRateLimitsUpdatedNotification,
+                event.payload,
+              );
+              if (payload && options?.onRateLimitsUpdate) {
+                yield* options.onRateLimitsUpdate(payload.rateLimits);
+              }
+            }
             const runtimeEvents = mapToRuntimeEvents(event, event.threadId);
             if (runtimeEvents.length === 0) {
               yield* Effect.logDebug("ignoring unhandled Codex provider event", {
@@ -1473,6 +1492,13 @@ export const makeCodexAdapter = Effect.fn("makeCodexAdapter")(function* (
             ),
           ),
         );
+
+        if (options?.onRateLimitsSnapshot) {
+          yield* runtime.readAccountRateLimits.pipe(
+            Effect.flatMap(options.onRateLimitsSnapshot),
+            Effect.catch((error) => options.onRateLimitsError?.(error) ?? Effect.void),
+          );
+        }
 
         sessions.set(input.threadId, {
           threadId: input.threadId,

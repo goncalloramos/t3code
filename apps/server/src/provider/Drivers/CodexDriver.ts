@@ -21,13 +21,20 @@
  *
  * @module provider/Drivers/CodexDriver
  */
-import { CodexSettings, ProviderDriverKind, type ServerProvider } from "@t3tools/contracts";
+import {
+  CodexSettings,
+  ProviderDriverKind,
+  type ServerProvider,
+  type ServerProviderRateLimits,
+} from "@t3tools/contracts";
+import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
 import * as Crypto from "effect/Crypto";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import * as Ref from "effect/Ref";
 import { HttpClient } from "effect/unstable/http";
 import { ChildProcessSpawner } from "effect/unstable/process";
 
@@ -42,6 +49,13 @@ import { makeManagedServerProvider } from "../makeManagedServerProvider.ts";
 import type { ProviderDriver, ProviderInstance } from "../ProviderDriver.ts";
 import type { ServerProviderDraft } from "../providerSnapshot.ts";
 import { mergeProviderInstanceEnvironment } from "../ProviderInstanceEnvironment.ts";
+import {
+  isCodexRateLimitAuthenticationError,
+  loadingCodexRateLimits,
+  mergeCodexRateLimitUpdate,
+  normalizeCodexRateLimits,
+  unavailableCodexRateLimits,
+} from "@t3tools/shared/codexRateLimits";
 import {
   enrichProviderSnapshotWithVersionAdvisory,
   makePackageManagedProviderMaintenanceResolver,
@@ -121,6 +135,19 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
       const eventLoggers = yield* ProviderEventLoggers;
       const processEnv = mergeProviderInstanceEnvironment(environment);
       const homeLayout = yield* resolveCodexHomeLayout(config);
+      const rateLimitsRef = yield* Ref.make<ServerProviderRateLimits>(loadingCodexRateLimits());
+      let publishRateLimits = (rateLimits: ServerProviderRateLimits): Effect.Effect<void> =>
+        Ref.set(rateLimitsRef, rateLimits);
+      const updateRateLimits = Effect.fn("CodexDriver.updateRateLimits")(function* (
+        update: (previous: ServerProviderRateLimits, updatedAt: string) => ServerProviderRateLimits,
+      ) {
+        const updatedAt = DateTime.formatIso(yield* DateTime.now);
+        const rateLimits = yield* Ref.modify(rateLimitsRef, (previous) => {
+          const next = update(previous, updatedAt);
+          return [next, next] as const;
+        });
+        yield* publishRateLimits(rateLimits);
+      });
       const continuationIdentity = codexContinuationIdentity(homeLayout);
       const stampIdentity = withInstanceIdentity({
         instanceId,
@@ -159,6 +186,16 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         instanceId,
         environment: processEnv,
         ...(eventLoggers.native ? { nativeEventLogger: eventLoggers.native } : {}),
+        onRateLimitsSnapshot: (snapshot) =>
+          updateRateLimits((_previous, updatedAt) => normalizeCodexRateLimits(snapshot, updatedAt)),
+        onRateLimitsUpdate: (update) =>
+          updateRateLimits((previous, updatedAt) =>
+            mergeCodexRateLimitUpdate(previous, update, updatedAt),
+          ),
+        onRateLimitsError: (error) =>
+          updateRateLimits((_previous, updatedAt) =>
+            unavailableCodexRateLimits(updatedAt, isCodexRateLimitAuthenticationError(error)),
+          ),
       });
       const textGeneration = yield* makeCodexTextGeneration(effectiveConfig, processEnv);
 
@@ -166,8 +203,11 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
       // in as instance rebuilds from the registry rather than in-place
       // updates. Pre-provide `ChildProcessSpawner` so the check fits
       // `makeManagedServerProvider.checkProvider`'s `R = never`.
+      const withRateLimits = (snapshot: ServerProvider) =>
+        Ref.get(rateLimitsRef).pipe(Effect.map((rateLimits) => ({ ...snapshot, rateLimits })));
       const checkProvider = checkCodexProviderStatus(effectiveConfig, undefined, processEnv).pipe(
         Effect.map(stampIdentity),
+        Effect.flatMap(withRateLimits),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
       );
       const snapshotSettings = makeProviderSnapshotSettingsSource(effectiveConfig, serverSettings);
@@ -177,7 +217,10 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
         streamSettings: snapshotSettings.streamSettings,
         haveSettingsChanged: haveProviderSnapshotSettingsChanged,
         initialSnapshot: (settings) =>
-          makePendingCodexProvider(settings.provider).pipe(Effect.map(stampIdentity)),
+          makePendingCodexProvider(settings.provider).pipe(
+            Effect.map(stampIdentity),
+            Effect.flatMap(withRateLimits),
+          ),
         checkProvider,
         enrichSnapshot: ({ settings, snapshot, publishSnapshot }) =>
           enrichProviderSnapshotWithVersionAdvisory(snapshot, maintenanceCapabilities, {
@@ -198,6 +241,11 @@ export const CodexDriver: ProviderDriver<CodexSettings, CodexDriverEnv> = {
             }),
         ),
       );
+      publishRateLimits = (rateLimits) =>
+        Ref.set(rateLimitsRef, rateLimits).pipe(
+          Effect.andThen(snapshot.updateSnapshot!((current) => ({ ...current, rateLimits }))),
+          Effect.asVoid,
+        );
 
       return {
         instanceId,
