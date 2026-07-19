@@ -1,7 +1,8 @@
 # Codex quota custom desktop build
 
-This fork keeps the Codex quota UI on `feature/codex-quota-ui`. Its `main` branch should remain an
-unmodified mirror of `pingdotgg/t3code:main`.
+This fork ships the Codex quota UI and custom desktop identity from its `main` branch. The official
+T3 Code development line is tracked separately as `upstream/main`; custom commits must never be
+pushed to that remote.
 
 The packaged desktop app uses the product name `T3 Code Custom`, the app ID
 `com.goncalloramos.t3code-custom`, separate executable names, and user-data directory names.
@@ -10,17 +11,13 @@ cannot replace it. The updater mock remains available to updater tests and local
 
 ## Refresh after an upstream T3 Code release
 
-```sh
-git fetch upstream --prune
-git switch main
-git merge --ff-only upstream/main
-git push origin main
-git switch feature/codex-quota-ui
-git rebase main
-```
+Follow **Custom Fork Maintenance** in the repository root `AGENTS.md`. That procedure is canonical. It
+requires comparing patch-equivalent commits, changed-file overlap, and semantic feature concepts
+before merging upstream. This prevents replaying custom quota code when upstream has implemented the
+same behavior under different files or APIs.
 
-Resolve conflicts on the feature branch, then rerun verification. If the branch was already pushed,
-update it with `git push --force-with-lease origin feature/codex-quota-ui`.
+Integrate on a temporary `maintenance/upstream-YYYYMMDD` branch from `origin/main`, verify it, and only
+then fast-forward the fork's `main`. Never force-push `main`.
 
 ## Verify
 
