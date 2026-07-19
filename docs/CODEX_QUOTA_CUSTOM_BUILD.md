@@ -9,6 +9,12 @@ The packaged desktop app uses the product name `T3 Code Custom`, the app ID
 Production auto-updates are disabled in this build, so an official T3 Code release
 cannot replace it. The updater mock remains available to updater tests and local development.
 
+The custom desktop still checks the public official stable-release metadata once at launch. When a
+newer version exists it offers **Dismiss until restart** or **Analyse**. Analyse opens a Plan-mode
+Codex thread in this repository; after reviewing its upstream/custom overlap report, the marked plan
+shows an explicit **Update** action that starts the implementation, verification, and DMG workflow.
+This notification does not download or install the official application.
+
 ## Refresh after an upstream T3 Code release
 
 Follow **Custom Fork Maintenance** in the repository root `AGENTS.md`. That procedure is canonical. It

@@ -44,6 +44,7 @@ import {
   shouldSubmitComposerOnEnter,
 } from "../../composer-logic";
 import { deriveComposerSendState, readFileAsDataUrl } from "../ChatView.logic";
+import { resolvePlanImplementationLabel } from "../../customUpstreamUpdate";
 import {
   type ComposerImageAttachment,
   type DraftId,
@@ -361,6 +362,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
+  implementPlanLabel?: string | undefined;
 }) {
   return (
     <>
@@ -388,6 +390,7 @@ const ComposerFooterPrimaryActions = memo(function ComposerFooterPrimaryActions(
         onPreviousPendingQuestion={props.onPreviousPendingQuestion}
         onInterrupt={props.onInterrupt}
         onImplementPlanInNewThread={props.onImplementPlanInNewThread}
+        implementPlanLabel={props.implementPlanLabel}
       />
     </>
   );
@@ -2594,6 +2597,9 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                   onPreviousPendingQuestion={onPreviousActivePendingUserInputQuestion}
                   onInterrupt={handleInterruptPrimaryAction}
                   onImplementPlanInNewThread={handleImplementPlanInNewThreadPrimaryAction}
+                  implementPlanLabel={resolvePlanImplementationLabel(
+                    activeProposedPlan?.planMarkdown,
+                  )}
                 />
               </div>
             </div>

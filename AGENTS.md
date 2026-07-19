@@ -98,6 +98,18 @@ official base `1735e27d9`. Do not assume those hashes remain current; always cal
 4. Compatibility
    - Claude, Cursor, and OpenCode behavior must remain unchanged.
    - Hosted/web T3 branding must not be globally renamed to the custom desktop branding.
+5. Review-first upstream release notification
+   - The custom desktop checks the public `pingdotgg/t3code` latest stable GitHub release once per
+     app launch. It never downloads or installs the official artifact.
+   - The notification offers `Dismiss until restart` and `Analyse`. Dismissal is intentionally
+     session-only so a newer app launch reminds the user again.
+   - `Analyse` starts a Plan-mode Codex thread in the custom fork project. The prompt requires the
+     overlap audit in this file and prohibits merging or editing during analysis.
+   - Marked update plans render an explicit `Update` action. The existing plan implementation flow
+     creates a separate implementation thread; that thread must preserve the manual review, test,
+     DMG build, and no-unapproved-main-push safeguards below.
+   - Primary files are `apps/web/src/customUpstreamUpdate.ts` and
+     `apps/web/src/components/CustomUpstreamUpdateNotification.tsx`.
 
 The original logical custom commits are useful during audits:
 
@@ -191,6 +203,10 @@ git diff upstream/main...HEAD
 git log --oneline --decorate upstream/main..HEAD
 ```
 
+For a stable upstream release, update the custom desktop package version to that release version
+before building. The non-installing watcher compares the installed custom version with the latest
+official stable tag; leaving an older version would repeat the notification after every launch.
+
 The final diff should contain only behavior still specific to this fork. Unexpected upstream code in
 that diff usually means the merge or conflict resolution is wrong.
 
@@ -223,6 +239,9 @@ Manually verify at least these behaviors:
 - Start sessions for Claude, Cursor, and OpenCode to confirm provider-aware behavior.
 - Confirm stable desktop branding says `CUSTOM`, uses the custom icon and app ID, stores data separately,
   and cannot be replaced by the official updater.
+- With a newer mocked GitHub release, confirm the custom update toast has `Dismiss until restart` and
+  `Analyse`, dismissal resets on relaunch, analysis opens the custom repository in Plan mode, and a
+  marked proposed plan renders `Update`. Confirm the official artifact is never downloaded.
 
 Build and validate the installable artifact. On Apple Silicon macOS:
 

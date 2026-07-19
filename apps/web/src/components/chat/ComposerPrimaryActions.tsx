@@ -28,6 +28,7 @@ interface ComposerPrimaryActionsProps {
   onPreviousPendingQuestion: () => void;
   onInterrupt: () => void;
   onImplementPlanInNewThread: () => void;
+  implementPlanLabel?: string | undefined;
 }
 
 export const formatPendingPrimaryActionLabel = (input: {
@@ -67,6 +68,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
   onPreviousPendingQuestion,
   onInterrupt,
   onImplementPlanInNewThread,
+  implementPlanLabel = "Implement",
 }: ComposerPrimaryActionsProps) {
   const pointerFocusProps = preserveComposerFocusOnPointerDown
     ? { onPointerDown: preventPointerFocus }
@@ -163,7 +165,7 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
           {...pointerFocusProps}
           disabled={isSendBusy || isConnecting || isEnvironmentUnavailable}
         >
-          {isConnecting || isSendBusy ? "Sending..." : "Implement"}
+          {isConnecting || isSendBusy ? "Sending..." : implementPlanLabel}
         </Button>
         <Menu>
           <MenuTrigger
@@ -185,7 +187,9 @@ export const ComposerPrimaryActions = memo(function ComposerPrimaryActions({
               disabled={isSendBusy || isConnecting || isEnvironmentUnavailable}
               onClick={() => void onImplementPlanInNewThread()}
             >
-              Implement in a new thread
+              {implementPlanLabel === "Update"
+                ? "Update in a new thread"
+                : "Implement in a new thread"}
             </MenuItem>
           </MenuPopup>
         </Menu>
