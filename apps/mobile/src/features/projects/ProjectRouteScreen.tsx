@@ -16,6 +16,7 @@ import {
 } from "../../state/workspace";
 import { relativeTime } from "../../lib/time";
 import { currentUiGeneration } from "../../lib/currentUiGeneration";
+import { supportsProjectOverviewNavigation } from "../../lib/uiGeneration";
 
 type ProjectRouteParams = {
   readonly environmentId: string;
@@ -193,11 +194,11 @@ function NextProjectRouteScreen({ route }: StaticScreenProps<ProjectRouteParams>
 
 export function ProjectRouteScreen(props: StaticScreenProps<ProjectRouteParams>) {
   const navigation = useNavigation();
-  const nextUiEnabled = currentUiGeneration() === "next";
+  const projectOverviewNavigationEnabled = supportsProjectOverviewNavigation(currentUiGeneration());
 
   useEffect(() => {
-    if (!nextUiEnabled) navigation.navigate("Home");
-  }, [navigation, nextUiEnabled]);
+    if (!projectOverviewNavigationEnabled) navigation.navigate("Home");
+  }, [navigation, projectOverviewNavigationEnabled]);
 
-  return nextUiEnabled ? <NextProjectRouteScreen {...props} /> : null;
+  return projectOverviewNavigationEnabled ? <NextProjectRouteScreen {...props} /> : null;
 }

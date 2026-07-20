@@ -33,6 +33,8 @@ import {
   type WorkspacePaneLayout,
 } from "../../lib/layout";
 import { resolveThreadSelectionNavigationAction } from "../../lib/adaptive-navigation";
+import { currentUiGeneration } from "../../lib/currentUiGeneration";
+import { supportsProjectOverviewNavigation } from "../../lib/uiGeneration";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import {
   parseActiveThreadPath,
@@ -187,6 +189,7 @@ export function AdaptiveWorkspaceLayout(props: {
   const { width, height } = useWindowDimensions();
   const pathname = props.pathname;
   const navigation = useNavigation();
+  const projectOverviewNavigationEnabled = supportsProjectOverviewNavigation(currentUiGeneration());
   const activeRoleOwner = useRef<symbol | null>(null);
   const [primarySidebarPreferredVisible, setPrimarySidebarPreferredVisible] = useState(true);
   const [supplementaryPanePreferredVisible, setSupplementaryPanePreferredVisible] = useState(true);
@@ -418,6 +421,16 @@ export function AdaptiveWorkspaceLayout(props: {
     [navigation],
   );
 
+  const handleSelectProject = useCallback(
+    (project: EnvironmentProject) => {
+      navigation.navigate("Project", {
+        environmentId: project.environmentId,
+        projectId: project.id,
+      });
+    },
+    [navigation],
+  );
+
   const renderedSidebarWidth = useSharedValue(
     panes.primarySidebarVisible ? (layout.listPaneWidth ?? 0) : 0,
   );
@@ -496,6 +509,7 @@ export function AdaptiveWorkspaceLayout(props: {
                 onOpenSettings={handleOpenSettings}
                 onOpenEnvironmentSettings={handleOpenEnvironmentSettings}
                 onNewThreadInProject={handleNewThreadInProject}
+                onSelectProject={projectOverviewNavigationEnabled ? handleSelectProject : undefined}
                 onSelectThread={handleSelectThread}
                 onSearchQueryChange={setPrimarySidebarSearchQuery}
                 searchQuery={primarySidebarSearchQuery}

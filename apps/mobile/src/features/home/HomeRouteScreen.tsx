@@ -6,6 +6,7 @@ import { useMemo, useState } from "react";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import { renderCompactBrandTitle } from "../../components/CompactBrandTitle";
 import { currentUiGeneration } from "../../lib/currentUiGeneration";
+import { supportsProjectOverviewNavigation } from "../../lib/uiGeneration";
 import { usePendingNewTasks } from "../../state/use-pending-new-tasks";
 import {
   useWorkspaceProjects,
@@ -32,7 +33,7 @@ export function HomeRouteScreen() {
   const { state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const navigation = useNavigation();
-  const nextUiEnabled = currentUiGeneration() === "next";
+  const projectOverviewNavigationEnabled = supportsProjectOverviewNavigation(currentUiGeneration());
   const [searchQuery, setSearchQuery] = useState("");
   const { archiveThread, confirmDeleteThread } = useThreadListActions();
   const pendingTasks = usePendingNewTasks();
@@ -134,7 +135,7 @@ export function HomeRouteScreen() {
             });
           }}
           onSelectProject={
-            nextUiEnabled
+            projectOverviewNavigationEnabled
               ? (project) => {
                   navigation.navigate("Project", {
                     environmentId: project.environmentId,

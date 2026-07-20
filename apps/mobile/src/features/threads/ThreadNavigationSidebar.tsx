@@ -112,6 +112,7 @@ interface ThreadNavigationSidebarProps {
   readonly onOpenSettings: () => void;
   readonly onOpenEnvironmentSettings: () => void;
   readonly onNewThreadInProject: (project: EnvironmentProject) => void;
+  readonly onSelectProject?: (project: EnvironmentProject) => void;
   readonly onSearchQueryChange: (query: string) => void;
   readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
   readonly onRequestVisibility: () => void;
@@ -418,6 +419,7 @@ function ThreadNavigationSidebarPane(
               // placeholder shell rather than a real project.
               newThreadTarget={item.group.newThreadTarget}
               onNewThread={props.onNewThreadInProject}
+              onSelectProject={props.onSelectProject}
               project={item.group.representative}
               threadCount={item.group.threads.length + item.group.pendingTasks.length}
               title={item.group.title}
@@ -486,6 +488,7 @@ function ThreadNavigationSidebarPane(
       openPendingTask,
       projectCwdByKey,
       props.onNewThreadInProject,
+      props.onSelectProject,
       props.selectedThreadKey,
       props.width,
       savedConnectionsById,
