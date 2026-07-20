@@ -2,6 +2,7 @@ import { useAtomValue } from "@effect/atom-react";
 import {
   createWorkspaceAtoms,
   createWorkspaceCommandScheduler,
+  type WorkspaceCommand,
   type WorkspaceConnectionSummary,
   type WorkspaceProject,
   type WorkspaceThread,
@@ -78,4 +79,8 @@ export function useWorkspaceThreadsForProjectRefs(
 
 export function readWorkspaceThread(ref: ScopedThreadRef): WorkspaceThread | null {
   return appAtomRegistry.get(workspaceAtoms.threadAtom(ref));
+}
+
+export function runWorkspaceCommand(command: WorkspaceCommand) {
+  return workspaceCommands.run(appAtomRegistry, command);
 }

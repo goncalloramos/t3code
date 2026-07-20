@@ -16,6 +16,7 @@ import {
   type SourceControlDiscoveryResult,
   type SourceControlProviderKind,
   type SourceControlRepositoryInfo,
+  type ThreadId,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
 } from "@t3tools/contracts";
 import { useNavigate, useParams } from "@tanstack/react-router";
@@ -45,6 +46,7 @@ import {
   type ReactNode,
 } from "react";
 import { useAtomValue } from "@effect/atom-react";
+import { WorkspaceCommands } from "@t3tools/client-runtime/workspace";
 import { OpenAddProjectCommandPaletteProvider } from "../commandPaletteContext";
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
@@ -59,7 +61,7 @@ import { sourceControlEnvironment } from "../state/sourceControl";
 import { useAtomCommand } from "../state/use-atom-command";
 import { useAtomQueryRunner } from "../state/use-atom-query-runner";
 import { useEnvironments, usePrimaryEnvironment } from "../state/environments";
-import { useProjects, useThreadShells } from "../state/entities";
+import { runWorkspaceCommand, useWorkspaceProjects, useWorkspaceThreads } from "../state/workspace";
 import {
   startNewThreadInProjectFromContext,
   startNewThreadFromContext,
@@ -473,8 +475,8 @@ function OpenCommandPaletteDialog(props: {
   const primaryEnvironment = usePrimaryEnvironment();
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
     useHandleNewThread();
-  const projects = useProjects();
-  const threads = useThreadShells();
+  const projects = useWorkspaceProjects();
+  const threads = useWorkspaceThreads();
   const keybindings = useAtomValue(primaryServerKeybindingsAtom);
   const [viewStack, setViewStack] = useState<CommandPaletteView[]>([]);
   const currentView = viewStack.at(-1) ?? null;
@@ -487,6 +489,16 @@ function OpenCommandPaletteDialog(props: {
   const [isRemoteProjectLookingUp, setIsRemoteProjectLookingUp] = useState(false);
   const [isRemoteProjectCloning, setIsRemoteProjectCloning] = useState(false);
   const primaryEnvironmentId = primaryEnvironment?.environmentId ?? null;
+  const navigateToWorkspaceThread = useCallback(
+    async (thread: { readonly environmentId: EnvironmentId; readonly id: ThreadId }) => {
+      await runWorkspaceCommand(WorkspaceCommands.selectThread(thread.environmentId, thread.id));
+      await navigate({
+        to: "/$environmentId/$threadId",
+        params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
+      });
+    },
+    [navigate],
+  );
 
   const addProjectEnvironmentOptions = useMemo(() => {
     const options = environments.map((environment): AddProjectEnvironmentOption => {
@@ -629,25 +641,21 @@ function OpenCommandPaletteDialog(props: {
   );
 
   const openProjectFromSearch = useMemo(
-    () => async (project: (typeof projects)[number]) => {
+    () => async (project: { readonly environmentId: EnvironmentId; readonly id: ProjectId }) => {
       const latestThread = getLatestThreadForProject(
         threads.filter((thread) => thread.environmentId === project.environmentId),
         project.id,
         clientSettings.sidebarThreadSortOrder,
       );
       if (latestThread) {
-        await navigate({
-          to: "/$environmentId/$threadId",
-          params: buildThreadRouteParams(
-            scopeThreadRef(latestThread.environmentId, latestThread.id),
-          ),
-        });
+        await navigateToWorkspaceThread(latestThread);
         return;
       }
 
+      await runWorkspaceCommand(WorkspaceCommands.selectProject(project.environmentId, project.id));
       await handleNewThread(scopeProjectRef(project.environmentId, project.id));
     },
-    [handleNewThread, navigate, clientSettings.sidebarThreadSortOrder, threads],
+    [handleNewThread, navigateToWorkspaceThread, clientSettings.sidebarThreadSortOrder, threads],
   );
 
   const projectSearchItems = useMemo(
@@ -681,6 +689,9 @@ function OpenCommandPaletteDialog(props: {
           />
         ),
         runProject: async (project) => {
+          await runWorkspaceCommand(
+            WorkspaceCommands.selectProject(project.environmentId, project.id),
+          );
           await startNewThreadInProjectFromContext(
             {
               activeDraftThread,
@@ -705,14 +716,15 @@ function OpenCommandPaletteDialog(props: {
         icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
         renderLeadingContent: (thread) => <ThreadRowLeadingStatus thread={thread} />,
         renderTrailingContent: (thread) => <ThreadRowTrailingStatus thread={thread} />,
-        runThread: async (thread) => {
-          await navigate({
-            to: "/$environmentId/$threadId",
-            params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
-          });
-        },
+        runThread: navigateToWorkspaceThread,
       }),
-    [activeThreadId, clientSettings.sidebarThreadSortOrder, navigate, projectTitleById, threads],
+    [
+      activeThreadId,
+      clientSettings.sidebarThreadSortOrder,
+      navigateToWorkspaceThread,
+      projectTitleById,
+      threads,
+    ],
   );
   const recentThreadItems = allThreadItems.slice(0, RECENT_THREAD_LIMIT);
 
@@ -1122,13 +1134,11 @@ function OpenCommandPaletteDialog(props: {
           clientSettings.sidebarThreadSortOrder,
         );
         if (latestThread) {
-          await navigate({
-            to: "/$environmentId/$threadId",
-            params: buildThreadRouteParams(
-              scopeThreadRef(latestThread.environmentId, latestThread.id),
-            ),
-          });
+          await navigateToWorkspaceThread(latestThread);
         } else {
+          await runWorkspaceCommand(
+            WorkspaceCommands.selectProject(existing.environmentId, existing.id),
+          );
           const navigationResult = await settlePromise(() =>
             handleNewThread(scopeProjectRef(existing.environmentId, existing.id)),
           );
@@ -1176,6 +1186,7 @@ function OpenCommandPaletteDialog(props: {
         return;
       }
 
+      await runWorkspaceCommand(WorkspaceCommands.selectProject(input.environmentId, projectId));
       const navigationResult = await settlePromise(() =>
         handleNewThread(scopeProjectRef(input.environmentId, projectId)),
       );
@@ -1195,7 +1206,7 @@ function OpenCommandPaletteDialog(props: {
     [
       handleNewThread,
       createProject,
-      navigate,
+      navigateToWorkspaceThread,
       projects,
       setOpen,
       clientSettings.sidebarThreadSortOrder,
