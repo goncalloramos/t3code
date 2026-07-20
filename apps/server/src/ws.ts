@@ -22,7 +22,6 @@ import {
   type AuthEnvironmentScope,
   AuthSessionId,
   CommandId,
-  type DiscoveredLocalServerList,
   EventId,
   type OrchestrationCommand,
   type GitActionProgressEvent,
@@ -110,6 +109,7 @@ import * as PairingGrantStore from "./auth/PairingGrantStore.ts";
 import * as SessionStore from "./auth/SessionStore.ts";
 import { failEnvironmentAuthInvalid, failEnvironmentInternal } from "./auth/http.ts";
 import { makeTerminalRpcHandlers } from "./rpc/terminal.ts";
+import { makePreviewRpcHandlers } from "./rpc/preview.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
@@ -1629,78 +1629,14 @@ const makeWsRpcLayer = (
           observeEffect: observeRpcEffect,
           observeStream: observeRpcStream,
         }),
-        [WS_METHODS.previewOpen]: (input) =>
-          observeRpcEffect(WS_METHODS.previewOpen, previewManager.open(input), {
-            "rpc.aggregate": "preview",
-          }),
-        [WS_METHODS.previewNavigate]: (input) =>
-          observeRpcEffect(WS_METHODS.previewNavigate, previewManager.navigate(input), {
-            "rpc.aggregate": "preview",
-          }),
-        [WS_METHODS.previewResize]: (input) =>
-          observeRpcEffect(WS_METHODS.previewResize, previewManager.resize(input), {
-            "rpc.aggregate": "preview",
-          }),
-        [WS_METHODS.previewRefresh]: (input) =>
-          observeRpcEffect(WS_METHODS.previewRefresh, previewManager.refresh(input), {
-            "rpc.aggregate": "preview",
-          }),
-        [WS_METHODS.previewClose]: (input) =>
-          observeRpcEffect(WS_METHODS.previewClose, previewManager.close(input), {
-            "rpc.aggregate": "preview",
-          }),
-        [WS_METHODS.previewList]: (input) =>
-          observeRpcEffect(WS_METHODS.previewList, previewManager.list(input), {
-            "rpc.aggregate": "preview",
-          }),
-        [WS_METHODS.previewReportStatus]: (input) =>
-          observeRpcEffect(WS_METHODS.previewReportStatus, previewManager.reportStatus(input), {
-            "rpc.aggregate": "preview",
-          }),
-        [WS_METHODS.previewAutomationConnect]: (input) =>
-          observeRpcStreamEffect(
-            WS_METHODS.previewAutomationConnect,
-            previewAutomationBroker.connect(input),
-            { "rpc.aggregate": "preview-automation" },
-          ),
-        [WS_METHODS.previewAutomationRespond]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.previewAutomationRespond,
-            previewAutomationBroker.respond(input),
-            { "rpc.aggregate": "preview-automation" },
-          ),
-        [WS_METHODS.previewAutomationFocusHost]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.previewAutomationFocusHost,
-            previewAutomationBroker.focusHost(input),
-            { "rpc.aggregate": "preview-automation" },
-          ),
-        [WS_METHODS.subscribePreviewEvents]: (_input) =>
-          observeRpcStream(WS_METHODS.subscribePreviewEvents, previewManager.events, {
-            "rpc.aggregate": "preview",
-          }),
-        [WS_METHODS.subscribeDiscoveredLocalServers]: (_input) =>
-          observeRpcStream(
-            WS_METHODS.subscribeDiscoveredLocalServers,
-            Stream.callback<DiscoveredLocalServerList>((queue) =>
-              Effect.gen(function* () {
-                yield* portDiscovery.retain;
-                const initial = yield* portDiscovery.scan();
-                const initialScannedAt = DateTime.formatIso(yield* DateTime.now);
-                yield* Queue.offer(queue, {
-                  servers: initial,
-                  scannedAt: initialScannedAt,
-                });
-                yield* portDiscovery.subscribe((servers) =>
-                  Effect.gen(function* () {
-                    const scannedAt = DateTime.formatIso(yield* DateTime.now);
-                    yield* Queue.offer(queue, { servers, scannedAt });
-                  }),
-                );
-              }),
-            ),
-            { "rpc.aggregate": "preview" },
-          ),
+        ...makePreviewRpcHandlers(
+          { portDiscovery, previewAutomationBroker, previewManager },
+          {
+            observeEffect: observeRpcEffect,
+            observeStream: observeRpcStream,
+            observeStreamEffect: observeRpcStreamEffect,
+          },
+        ),
         [WS_METHODS.subscribeServerConfig]: (_input) =>
           observeRpcStreamEffect(
             WS_METHODS.subscribeServerConfig,

@@ -13,4 +13,13 @@ export interface RpcHandlerObservers {
     stream: Stream.Stream<A, E, R>,
     traceAttributes?: Readonly<Record<string, unknown>>,
   ) => Stream.Stream<A, E | EnvironmentAuthorizationError, R>;
+  readonly observeStreamEffect: <A, StreamError, StreamContext, EffectError, EffectContext>(
+    method: string,
+    effect: Effect.Effect<Stream.Stream<A, StreamError, StreamContext>, EffectError, EffectContext>,
+    traceAttributes?: Readonly<Record<string, unknown>>,
+  ) => Stream.Stream<
+    A,
+    StreamError | EffectError | EnvironmentAuthorizationError,
+    StreamContext | EffectContext
+  >;
 }

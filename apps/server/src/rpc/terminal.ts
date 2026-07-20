@@ -26,7 +26,7 @@ export const TERMINAL_RPC_METHODS = [
 
 export function makeTerminalRpcHandlers(
   terminalManager: TerminalManager.TerminalManager["Service"],
-  { observeEffect, observeStream }: RpcHandlerObservers,
+  { observeEffect, observeStream }: Pick<RpcHandlerObservers, "observeEffect" | "observeStream">,
 ) {
   const traceAttributes = { "rpc.aggregate": "terminal" } as const;
 

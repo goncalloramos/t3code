@@ -40,7 +40,9 @@ function makeManager(
   };
 }
 
-function makeObservers(calls: Array<{ method: string; aggregate: unknown }>): RpcHandlerObservers {
+function makeObservers(
+  calls: Array<{ method: string; aggregate: unknown }>,
+): Pick<RpcHandlerObservers, "observeEffect" | "observeStream"> {
   return {
     observeEffect: (method, effect, attributes) => {
       calls.push({ method, aggregate: attributes?.["rpc.aggregate"] });
