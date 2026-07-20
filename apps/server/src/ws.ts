@@ -96,6 +96,7 @@ import { makeFilesystemRpcHandlers } from "./rpc/filesystem.ts";
 import { makeAccessRpcHandlers } from "./rpc/access.ts";
 import { makeServerRpcHandlers } from "./rpc/server.ts";
 import { makeSettingsRpcHandlers } from "./rpc/settings.ts";
+import { makeProviderRpcHandlers } from "./rpc/providers.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
@@ -1030,23 +1031,10 @@ const makeWsRpcLayer = (
             }),
             { "rpc.aggregate": "orchestration" },
           ),
-        [WS_METHODS.serverRefreshProviders]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.serverRefreshProviders,
-            (input.instanceId !== undefined
-              ? providerRegistry.refreshInstance(input.instanceId)
-              : providerRegistry.refresh()
-            ).pipe(Effect.map((providers) => ({ providers }))),
-            { "rpc.aggregate": "server" },
-          ),
-        [WS_METHODS.serverUpdateProvider]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.serverUpdateProvider,
-            providerMaintenanceRunner.updateProvider(input),
-            {
-              "rpc.aggregate": "server",
-            },
-          ),
+        ...makeProviderRpcHandlers(
+          { providerMaintenanceRunner, providerRegistry },
+          { observeEffect: observeRpcEffect },
+        ),
         ...makeSettingsRpcHandlers(
           { keybindings, serverSettings },
           { observeEffect: observeRpcEffect },

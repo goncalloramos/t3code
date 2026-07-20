@@ -1,5 +1,4 @@
 import { WS_METHODS } from "@t3tools/contracts";
-import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Stream from "effect/Stream";
 
@@ -16,8 +15,7 @@ import * as ServerSettings from "../serverSettings.ts";
 import type * as SourceControlDiscovery from "../sourceControl/SourceControlDiscovery.ts";
 import * as TraceDiagnostics from "../diagnostics/TraceDiagnostics.ts";
 import type { RpcHandlerObservers } from "./handlers.ts";
-
-const PROVIDER_STATUS_DEBOUNCE_MS = 200;
+import { makeProviderStatusUpdates } from "./providers.ts";
 
 export const SERVER_RPC_METHODS = [
   WS_METHODS.serverGetConfig,
@@ -173,14 +171,7 @@ export function makeServerRpcHandlers(
               },
             })),
           );
-          const providerStatuses = providerRegistry.streamChanges.pipe(
-            Stream.map((providers) => ({
-              version: 1 as const,
-              type: "providerStatuses" as const,
-              payload: { providers },
-            })),
-            Stream.debounce(Duration.millis(PROVIDER_STATUS_DEBOUNCE_MS)),
-          );
+          const providerStatuses = makeProviderStatusUpdates(providerRegistry);
           const settingsUpdates = serverSettings.streamChanges.pipe(
             Stream.map((settings) => ServerSettings.redactServerSettingsForClient(settings)),
             Stream.map((settings) => ({
