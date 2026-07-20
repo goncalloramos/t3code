@@ -1,5 +1,6 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import { WorkspaceCommands } from "@t3tools/client-runtime/workspace";
 import {
   DEFAULT_MODEL,
   DEFAULT_RUNTIME_MODE,
@@ -21,9 +22,9 @@ import {
   type GoncalloramosUpstreamRelease,
 } from "../goncalloramosUpstreamUpdate";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
-import { setActiveEnvironmentId, useProjects } from "../state/entities";
 import { threadEnvironment } from "../state/threads";
 import { useAtomCommand } from "../state/use-atom-command";
+import { runWorkspaceCommand, useWorkspaceProjects } from "../state/workspace";
 import { newMessageId, newThreadId } from "../lib/utils";
 import { waitForStartedServerThread } from "./ChatView.logic";
 import { stackedThreadToast, toastManager } from "./ui/toast";
@@ -50,7 +51,7 @@ function fetchLatestUpstreamRelease(): Promise<unknown> {
  */
 export function GoncalloramosUpstreamUpdateNotification() {
   const navigate = useNavigate();
-  const projects = useProjects();
+  const projects = useWorkspaceProjects();
   const desktopUpdateState = useDesktopUpdateState();
   const startThreadTurn = useAtomCommand(threadEnvironment.startTurn, { reportFailure: false });
   const toastIdRef = useRef<ReturnType<typeof toastManager.add> | null>(null);
@@ -154,7 +155,7 @@ export function GoncalloramosUpstreamUpdateNotification() {
       await waitForStartedServerThread(scopeThreadRef(project.environmentId, threadId));
       if (toastId !== null) toastManager.close(toastId);
       toastIdRef.current = null;
-      setActiveEnvironmentId(project.environmentId);
+      await runWorkspaceCommand(WorkspaceCommands.selectThread(project.environmentId, threadId));
       await navigate({
         to: "/$environmentId/$threadId",
         params: { environmentId: project.environmentId, threadId },

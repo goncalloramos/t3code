@@ -4,19 +4,20 @@ import {
   scopeProjectRef,
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
+import { WorkspaceCommands } from "@t3tools/client-runtime/workspace";
 import type { DesktopAgentNotification } from "@t3tools/contracts";
 import { projectThreadAwareness, type AgentAwarenessPhase } from "@t3tools/shared/agentAwareness";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useRef } from "react";
 
-import { useProjects, useThreadShells } from "../state/entities";
+import { runWorkspaceCommand, useWorkspaceProjects, useWorkspaceThreads } from "../state/workspace";
 import { resolveDesktopAgentNotificationTransition } from "./DesktopAgentNotifications.logic";
 
 export function DesktopAgentNotifications() {
   const bridge = window.desktopBridge;
   const navigate = useNavigate();
-  const projects = useProjects();
-  const threads = useThreadShells();
+  const projects = useWorkspaceProjects();
+  const threads = useWorkspaceThreads();
   const phasesRef = useRef(new Map<string, AgentAwarenessPhase>());
   const initializedRef = useRef(false);
   const projectsByKey = useMemo(
@@ -34,10 +35,12 @@ export function DesktopAgentNotifications() {
     if (!bridge) return;
 
     const removeClickListener = bridge.onAgentNotificationClick(({ environmentId, threadId }) => {
-      void navigate({
-        to: "/$environmentId/$threadId",
-        params: { environmentId, threadId },
-      });
+      void runWorkspaceCommand(WorkspaceCommands.selectThread(environmentId, threadId)).then(() =>
+        navigate({
+          to: "/$environmentId/$threadId",
+          params: { environmentId, threadId },
+        }),
+      );
     });
     return removeClickListener;
   }, [bridge, navigate]);
