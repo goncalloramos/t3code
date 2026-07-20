@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from "@tanstack/react-router";
 import { isElectron } from "../env";
 import { resolveShortcutCommand, shortcutLabelForCommand } from "../keybindings";
 import { isMacPlatform } from "../lib/utils";
+import { currentUiGeneration } from "../lib/uiGeneration";
 import { primaryServerKeybindingsAtom } from "../state/server";
 import ThreadSidebar from "./Sidebar";
 import { Sidebar, SidebarProvider, SidebarRail, SidebarTrigger, useSidebar } from "./ui/sidebar";
@@ -106,7 +107,12 @@ export function AppSidebarLayout({ children }: { children: ReactNode }) {
   }, [navigate, pathname]);
 
   return (
-    <SidebarProvider className="h-dvh! min-h-0!" defaultOpen style={macosWindowControlsStyle}>
+    <SidebarProvider
+      className="h-dvh! min-h-0!"
+      data-workspace-frame={currentUiGeneration}
+      defaultOpen
+      style={macosWindowControlsStyle}
+    >
       <Sidebar
         side="left"
         collapsible="offcanvas"

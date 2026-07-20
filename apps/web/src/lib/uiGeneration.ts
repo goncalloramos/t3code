@@ -5,3 +5,7 @@ export function resolveUiGeneration(value: unknown): UiGeneration {
 }
 
 export const currentUiGeneration = resolveUiGeneration(import.meta.env.VITE_T3CODE_UI_GENERATION);
+
+export function shouldRestoreWorkspaceInspectorFocus(generation: UiGeneration): boolean {
+  return generation === "next";
+}

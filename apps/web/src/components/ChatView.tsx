@@ -116,6 +116,7 @@ import { isCommandPaletteOpen } from "../commandPaletteContext";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
+import { currentUiGeneration, shouldRestoreWorkspaceInspectorFocus } from "../lib/uiGeneration";
 import {
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
@@ -5206,7 +5207,9 @@ function ChatViewContent(props: ChatViewProps) {
           "flex min-h-0 min-w-0 flex-col overflow-x-hidden",
           rightPanelMaximized ? "w-0 flex-none" : "flex-1",
         )}
+        data-primary-workspace
         data-chat-column-maximized-away={rightPanelMaximized ? "true" : "false"}
+        tabIndex={-1}
       >
         {/* Top bar */}
         <header
@@ -5568,7 +5571,11 @@ function ChatViewContent(props: ChatViewProps) {
         </RightPanelTabs>
       ) : null}
       {shouldUsePlanSidebarSheet && rightPanelOpen && activeThreadRef ? (
-        <RightPanelSheet open onClose={planSidebarOpen ? closePlanSidebar : closePreviewPanel}>
+        <RightPanelSheet
+          open
+          onClose={planSidebarOpen ? closePlanSidebar : closePreviewPanel}
+          restoreFocusToPrimaryWorkspace={shouldRestoreWorkspaceInspectorFocus(currentUiGeneration)}
+        >
           <RightPanelTabs
             mode="sheet"
             layoutControls={panelToggleControls}

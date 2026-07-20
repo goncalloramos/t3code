@@ -3,10 +3,15 @@ import { type ReactNode } from "react";
 import { RIGHT_PANEL_SHEET_CLASS_NAME } from "../rightPanelLayout";
 import { Sheet, SheetPopup } from "./ui/sheet";
 
+function focusPrimaryWorkspace() {
+  return document.querySelector<HTMLElement>("[data-primary-workspace]") ?? false;
+}
+
 export function RightPanelSheet(props: {
   children: ReactNode;
   open: boolean;
   onClose: () => void;
+  restoreFocusToPrimaryWorkspace?: boolean;
 }) {
   return (
     <Sheet
@@ -22,6 +27,7 @@ export function RightPanelSheet(props: {
         showCloseButton={false}
         keepMounted
         className={RIGHT_PANEL_SHEET_CLASS_NAME}
+        finalFocus={props.restoreFocusToPrimaryWorkspace ? focusPrimaryWorkspace : undefined}
       >
         {props.children}
       </SheetPopup>
