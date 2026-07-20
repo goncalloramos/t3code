@@ -1,0 +1,1249 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>T3 Code 0.29.0 — Remaining Implementation Plan</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f6f8;
+        --surface: #ffffff;
+        --surface-2: #eef2f5;
+        --surface-3: #e5eaee;
+        --text: #17202a;
+        --muted: #596773;
+        --faint: #7a8791;
+        --line: #d7dee4;
+        --line-strong: #b9c4cc;
+        --accent: #2563eb;
+        --accent-soft: #e8f0ff;
+        --success: #137a4a;
+        --success-soft: #e2f5eb;
+        --warning: #9a5a00;
+        --warning-soft: #fff1d6;
+        --danger: #b42318;
+        --danger-soft: #fee9e7;
+        --violet: #6d45c1;
+        --violet-soft: #f0eaff;
+        --shadow: 0 12px 35px rgb(33 46 57 / 8%);
+        --radius: 16px;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      html[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #0f1419;
+        --surface: #171d23;
+        --surface-2: #20272e;
+        --surface-3: #29323a;
+        --text: #edf2f5;
+        --muted: #abb7c0;
+        --faint: #84919b;
+        --line: #34404a;
+        --line-strong: #4a5863;
+        --accent: #7aa2ff;
+        --accent-soft: #1c315b;
+        --success: #62d69a;
+        --success-soft: #173c2b;
+        --warning: #ffc56b;
+        --warning-soft: #493313;
+        --danger: #ff8a80;
+        --danger-soft: #4b211f;
+        --violet: #bea6ff;
+        --violet-soft: #332750;
+        --shadow: 0 16px 42px rgb(0 0 0 / 25%);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      html {
+        scroll-behavior: smooth;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 14px/1.55 var(--sans);
+      }
+      button,
+      a {
+        font: inherit;
+      }
+      a {
+        color: var(--accent);
+      }
+      :focus-visible {
+        outline: 3px solid var(--accent);
+        outline-offset: 3px;
+      }
+
+      .shell {
+        width: min(1500px, 100%);
+        margin: 0 auto;
+        padding: 24px;
+      }
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin: -24px -24px 24px;
+        padding: 14px 24px;
+        border-bottom: 1px solid var(--line);
+        background: color-mix(in srgb, var(--bg) 90%, transparent);
+        backdrop-filter: blur(14px);
+      }
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 750;
+      }
+      .mark {
+        display: grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        border-radius: 9px;
+        background: #111827;
+        color: white;
+        font-weight: 850;
+      }
+      .controls {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      .control {
+        min-height: 38px;
+        padding: 7px 12px;
+        border: 1px solid var(--line-strong);
+        border-radius: 10px;
+        background: var(--surface);
+        color: var(--text);
+        cursor: pointer;
+      }
+      .control[aria-pressed="true"] {
+        border-color: var(--accent);
+        background: var(--accent-soft);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.75fr);
+        gap: 18px;
+        margin-bottom: 18px;
+      }
+      .panel {
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        background: var(--surface);
+        box-shadow: var(--shadow);
+      }
+      .hero-main {
+        padding: clamp(24px, 4vw, 46px);
+      }
+      .eyebrow {
+        margin: 0 0 12px;
+        color: var(--accent);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      h1 {
+        max-width: 850px;
+        margin: 0;
+        font-size: clamp(32px, 5vw, 62px);
+        line-height: 1.02;
+        letter-spacing: -0.045em;
+      }
+      .lede {
+        max-width: 850px;
+        margin: 18px 0 0;
+        color: var(--muted);
+        font-size: clamp(16px, 2vw, 20px);
+      }
+      .hero-side {
+        padding: 22px;
+      }
+      .hero-side h2,
+      .section-head h2 {
+        margin: 0;
+        font-size: 18px;
+      }
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 10px;
+        margin-top: 16px;
+      }
+      .metric {
+        min-height: 98px;
+        padding: 14px;
+        border-radius: 12px;
+        background: var(--surface-2);
+      }
+      .metric strong {
+        display: block;
+        font-size: 27px;
+        line-height: 1;
+      }
+      .metric span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .notice {
+        display: flex;
+        gap: 12px;
+        margin: 18px 0;
+        padding: 14px 16px;
+        border: 1px solid color-mix(in srgb, var(--warning) 35%, var(--line));
+        border-radius: 12px;
+        background: var(--warning-soft);
+      }
+      .notice strong {
+        color: var(--warning);
+      }
+
+      .section {
+        margin-top: 30px;
+        scroll-margin-top: 80px;
+      }
+      .section-head {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+        align-items: end;
+        margin-bottom: 12px;
+      }
+      .section-head p {
+        max-width: 760px;
+        margin: 4px 0 0;
+        color: var(--muted);
+      }
+      .tag {
+        display: inline-flex;
+        align-items: center;
+        min-height: 26px;
+        padding: 3px 9px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 750;
+      }
+      .tag.done {
+        background: var(--success-soft);
+        color: var(--success);
+      }
+      .tag.now {
+        background: var(--accent-soft);
+        color: var(--accent);
+      }
+      .tag.later {
+        background: var(--surface-2);
+        color: var(--muted);
+      }
+      .tag.blocked {
+        background: var(--danger-soft);
+        color: var(--danger);
+      }
+
+      .path {
+        display: grid;
+        grid-template-columns: repeat(8, minmax(125px, 1fr));
+        gap: 8px;
+        overflow-x: auto;
+        padding: 16px;
+      }
+      .path-step {
+        position: relative;
+        min-height: 118px;
+        padding: 13px;
+        border-radius: 12px;
+        background: var(--surface-2);
+      }
+      .path-step::after {
+        content: "→";
+        position: absolute;
+        top: 44px;
+        right: -11px;
+        z-index: 1;
+        color: var(--faint);
+        font-weight: 800;
+      }
+      .path-step:last-child::after {
+        content: none;
+      }
+      .path-step b {
+        display: block;
+        margin-top: 8px;
+      }
+      .path-step small {
+        display: block;
+        margin-top: 6px;
+        color: var(--muted);
+      }
+
+      .phases {
+        display: grid;
+        gap: 14px;
+      }
+      .phase {
+        display: grid;
+        grid-template-columns: 150px minmax(0, 1fr);
+        overflow: hidden;
+      }
+      .phase[hidden] {
+        display: none;
+      }
+      .phase-meta {
+        padding: 20px;
+        border-right: 1px solid var(--line);
+        background: var(--surface-2);
+      }
+      .phase-number {
+        color: var(--accent);
+        font: 800 12px/1 var(--mono);
+        letter-spacing: 0.08em;
+      }
+      .phase-meta h3 {
+        margin: 10px 0 6px;
+        font-size: 17px;
+        line-height: 1.2;
+      }
+      .phase-meta p {
+        margin: 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      .phase-body {
+        min-width: 0;
+        padding: 20px;
+      }
+      .phase-goal {
+        margin: 0 0 14px;
+        color: var(--muted);
+      }
+      .changes {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+      }
+      .change {
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--bg);
+      }
+      .change b {
+        display: block;
+        font-size: 13px;
+      }
+      .change p {
+        margin: 5px 0 0;
+        color: var(--muted);
+        font-size: 12px;
+      }
+      code {
+        font: 12px/1.45 var(--mono);
+        color: var(--violet);
+        overflow-wrap: anywhere;
+      }
+      .exit {
+        margin-top: 14px;
+        padding: 12px;
+        border-left: 4px solid var(--success);
+        background: var(--success-soft);
+      }
+      .exit strong {
+        color: var(--success);
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .card {
+        padding: 18px;
+      }
+      .card h3 {
+        margin: 0 0 10px;
+        font-size: 15px;
+      }
+      .card p {
+        color: var(--muted);
+      }
+      .card ul,
+      .card ol {
+        margin: 10px 0 0;
+        padding-left: 20px;
+      }
+      .card li + li {
+        margin-top: 7px;
+      }
+
+      .table-wrap {
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 840px;
+      }
+      th,
+      td {
+        padding: 12px;
+        border-bottom: 1px solid var(--line);
+        text-align: left;
+        vertical-align: top;
+      }
+      th {
+        background: var(--surface-2);
+        color: var(--muted);
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+      }
+      td:first-child {
+        font-weight: 700;
+      }
+
+      .checklist {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .check {
+        display: flex;
+        gap: 9px;
+        padding: 12px;
+        border: 1px solid var(--line);
+        border-radius: 11px;
+        background: var(--surface);
+      }
+      .check::before {
+        content: "□";
+        color: var(--accent);
+        font: 700 18px/1 var(--mono);
+      }
+      .check.done::before {
+        content: "✓";
+        color: var(--success);
+      }
+
+      .footer {
+        margin-top: 34px;
+        padding: 18px 0 6px;
+        border-top: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      @media (max-width: 980px) {
+        .hero,
+        .two-col {
+          grid-template-columns: 1fr;
+        }
+        .phase {
+          grid-template-columns: 1fr;
+        }
+        .phase-meta {
+          border-right: 0;
+          border-bottom: 1px solid var(--line);
+        }
+        .checklist {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+      @media (max-width: 620px) {
+        .shell {
+          padding: 14px;
+        }
+        .topbar {
+          align-items: flex-start;
+          margin: -14px -14px 16px;
+          padding: 10px 14px;
+        }
+        .brand span:last-child {
+          display: none;
+        }
+        .hero-main,
+        .hero-side,
+        .phase-body,
+        .phase-meta {
+          padding: 17px;
+        }
+        .metric-grid,
+        .changes,
+        .checklist {
+          grid-template-columns: 1fr;
+        }
+        .section-head {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+        h1 {
+          font-size: 36px;
+        }
+      }
+      @media print {
+        :root {
+          --bg: #fff;
+          --surface: #fff;
+          --surface-2: #f2f3f5;
+          --text: #111;
+          --muted: #444;
+          --line: #ccc;
+          --shadow: none;
+        }
+        .topbar,
+        .controls {
+          display: none;
+        }
+        .shell {
+          width: 100%;
+          padding: 0;
+        }
+        .panel,
+        .change,
+        .check {
+          break-inside: avoid;
+          box-shadow: none;
+        }
+        .phase[hidden] {
+          display: grid;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="shell">
+      <nav class="topbar" aria-label="Plan controls">
+        <div class="brand">
+          <span class="mark" aria-hidden="true">G</span><span>T3 Code 0.29.0 roadmap</span>
+        </div>
+        <div class="controls">
+          <button class="control" id="allPhases" type="button" aria-pressed="true">
+            All phases
+          </button>
+          <button class="control" id="criticalOnly" type="button" aria-pressed="false">
+            Critical path
+          </button>
+          <button class="control" id="themeToggle" type="button" aria-pressed="false">Dark</button>
+        </div>
+      </nav>
+
+      <header class="hero">
+        <div class="panel hero-main">
+          <p class="eyebrow">Execution plan · current checkpoint</p>
+          <h1>Finish the shared runtime before scaling the new interface.</h1>
+          <p class="lede">
+            The remaining work is ordered to remove duplicated state ownership first, then build
+            each feature as a cross-client vertical slice. Release work stays last so no development
+            build masquerades as 0.29.0.
+          </p>
+        </div>
+        <aside class="panel hero-side" aria-label="Current status">
+          <h2>Current state</h2>
+          <div class="metric-grid">
+            <div class="metric">
+              <strong>15</strong><span>local commits ahead of origin/main</span>
+            </div>
+            <div class="metric"><strong>12</strong><span>server RPC domains extracted</span></div>
+            <div class="metric">
+              <strong>1,162</strong><span>lines remain in the WebSocket composition</span>
+            </div>
+            <div class="metric">
+              <strong>4/4</strong><span>required repository gates passing</span>
+            </div>
+          </div>
+        </aside>
+      </header>
+
+      <div class="notice" role="note">
+        <span aria-hidden="true">⚠</span>
+        <div>
+          <strong>Release boundary.</strong> Do not bump versions, delete the legacy shell, build
+          distributable artifacts, push <code>main</code>, or submit iOS until the parity and
+          migration gates are complete.
+        </div>
+      </div>
+
+      <section class="section" id="critical-path">
+        <div class="section-head">
+          <div>
+            <h2>Critical path</h2>
+            <p>
+              Each stage produces a usable checkpoint. A failed gate stops the sequence without
+              invalidating earlier commits.
+            </p>
+          </div>
+          <span class="tag now">Active: server modularization</span>
+        </div>
+        <div class="panel path" aria-label="Critical path diagram">
+          <div class="path-step">
+            <span class="tag done">Done</span><b>Foundation</b
+            ><small>Flag, prototype, notifications, workspace model</small>
+          </div>
+          <div class="path-step">
+            <span class="tag now">Now</span><b>RPC registry</b
+            ><small>Finish domain extraction and lock scopes</small>
+          </div>
+          <div class="path-step">
+            <span class="tag later">Next</span><b>Runtime bridge</b
+            ><small>One read model and command path</small>
+          </div>
+          <div class="path-step">
+            <span class="tag later">Then</span><b>Shells</b
+            ><small>Web, iPhone, iPad navigation frames</small>
+          </div>
+          <div class="path-step">
+            <span class="tag later">Then</span><b>Vertical slices</b
+            ><small>Projects, threads, tools, settings</small>
+          </div>
+          <div class="path-step">
+            <span class="tag later">Then</span><b>Platforms</b
+            ><small>Electron, iOS, Remote Mode, Android</small>
+          </div>
+          <div class="path-step">
+            <span class="tag later">Then</span><b>Migration</b
+            ><small>Preferences, rollback, pre-0.29 data</small>
+          </div>
+          <div class="path-step">
+            <span class="tag later">Last</span><b>Cutover</b
+            ><small>Remove legacy, set 0.29.0, validate artifacts</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="phases">
+        <div class="section-head">
+          <div>
+            <h2>Implementation phases</h2>
+            <p>
+              “Change set” means one reviewable commit or small commit series with its own focused
+              tests and rollback boundary.
+            </p>
+          </div>
+        </div>
+        <div class="phases">
+          <article class="panel phase" data-critical="true">
+            <div class="phase-meta">
+              <span class="phase-number">01</span>
+              <h3>Complete the RPC registry</h3>
+              <p>5 of 6 remaining change sets complete</p>
+            </div>
+            <div class="phase-body">
+              <p class="phase-goal">
+                Reduce <code>apps/server/src/ws.ts</code> to transport setup, service acquisition,
+                central scope enforcement, instrumentation, and domain registration.
+              </p>
+              <div class="changes">
+                <div class="change">
+                  <b><code>access.ts</code> <span class="tag done">Complete</span></b>
+                  <p>
+                    Move auth-access snapshot and revisioned stream. Test session filtering and
+                    reconnect snapshots.
+                  </p>
+                </div>
+                <div class="change">
+                  <b
+                    ><code>settings.ts</code> + <code>server.ts</code>
+                    <span class="tag done">Complete</span></b
+                  >
+                  <p>
+                    Move keybindings, settings, diagnostics, lifecycle, server config, and
+                    source-control discovery.
+                  </p>
+                </div>
+                <div class="change">
+                  <b><code>providers.ts</code> <span class="tag done">Complete</span></b>
+                  <p>
+                    Move provider refresh/update and status streaming without changing
+                    provider-neutral contracts.
+                  </p>
+                </div>
+                <div class="change">
+                  <b
+                    ><code>vcs.ts</code> + <code>git.ts</code>
+                    <span class="tag done">Complete</span></b
+                  >
+                  <p>
+                    Move status, refs, worktrees, pull, stacked actions, PR helpers, review preview,
+                    and refresh side effects.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Source control and relay <span class="tag done">Complete</span></b>
+                  <p>
+                    Place clone/publish/lookup and relay installation in their narrow domain owners;
+                    preserve progress streams.
+                  </p>
+                </div>
+                <div class="change">
+                  <b><code>orchestration.ts</code> last</b>
+                  <p>
+                    Move dispatch, bootstrap worktree/setup flow, snapshots, replay, shell/thread
+                    streams, and archive cleanup.
+                  </p>
+                </div>
+              </div>
+              <div class="exit">
+                <strong>Exit gate:</strong> every method appears exactly once; the central scope map
+                covers every method; replay and subscription tests prove no ordering, duplication,
+                or teardown regression.
+              </div>
+            </div>
+          </article>
+
+          <article class="panel phase" data-critical="true">
+            <div class="phase-meta">
+              <span class="phase-number">02</span>
+              <h3>Wire the shared workspace runtime</h3>
+              <p>5 focused change sets</p>
+            </div>
+            <div class="phase-body">
+              <p class="phase-goal">
+                Make <code>@t3tools/client-runtime/workspace</code> the single React-independent
+                owner of project/thread selection, attention, connection presentation, and command
+                intent.
+              </p>
+              <div class="changes">
+                <div class="change">
+                  <b>Snapshot adapters</b>
+                  <p>
+                    Adapt the existing environment registry and shell projections into
+                    <code>WorkspaceEnvironment</code> inputs. No second cache.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Effect Atom integration</b>
+                  <p>
+                    Expose one kept-alive workspace read atom and scoped selector atoms while
+                    retaining the existing runtime.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Command scheduler</b>
+                  <p>
+                    Route project/thread CRUD and selection intents through shared commands with
+                    environment-aware interruption.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Web migration</b>
+                  <p>
+                    Replace sidebar, route, command-palette, and notification selection wrappers one
+                    consumer at a time.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Mobile migration</b>
+                  <p>
+                    Replace home/project selection wrappers while leaving the persisted outbox and
+                    native navigation platform-owned.
+                  </p>
+                </div>
+              </div>
+              <div class="exit">
+                <strong>Exit gate:</strong> identical fixtures produce identical project, thread,
+                attention, stale, and selection results in web and mobile tests; reconnect never
+                discards the last usable snapshot.
+              </div>
+            </div>
+          </article>
+
+          <article class="panel phase" data-critical="true">
+            <div class="phase-meta">
+              <span class="phase-number">03</span>
+              <h3>Build the next-generation shells</h3>
+              <p>4 focused change sets</p>
+            </div>
+            <div class="phase-body">
+              <p class="phase-goal">
+                Introduce platform-native navigation frames behind the internal flag without
+                rewriting feature surfaces yet.
+              </p>
+              <div class="changes">
+                <div class="change">
+                  <b>Web/Electron frame</b>
+                  <p>
+                    Project navigation, primary workspace, resizable inspector, keyboard focus
+                    restoration, and responsive sheet.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Web project navigation</b>
+                  <p>
+                    Make project headers open overviews under <code>next</code>; keep separate
+                    disclosure and canonical thread links.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>iPhone stack</b>
+                  <p>
+                    Projects/Home → Project → Thread with anchored keyboard-aware composer and
+                    native sheets.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>iPad columns</b>
+                  <p>
+                    Projects/filter sidebar, content column, inspector column, and compact-size
+                    collapse behavior.
+                  </p>
+                </div>
+              </div>
+              <div class="exit">
+                <strong>Exit gate:</strong> both <code>legacy</code> and <code>next</code> boot in
+                CI; legacy behavior is unchanged; next supports keyboard/VoiceOver navigation
+                without dead ends.
+              </div>
+            </div>
+          </article>
+
+          <article class="panel phase" data-critical="true">
+            <div class="phase-meta">
+              <span class="phase-number">04</span>
+              <h3>Projects and connections slice</h3>
+              <p>4 focused change sets</p>
+            </div>
+            <div class="phase-body">
+              <p class="phase-goal">
+                Finish the partially implemented project overview as the first complete cross-client
+                workflow.
+              </p>
+              <div class="changes">
+                <div class="change">
+                  <b>Projects-first home</b>
+                  <p>
+                    Pinned/recent projects, compact attention, environment badges, search,
+                    empty/loading/stale/error states.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Project lifecycle</b>
+                  <p>
+                    Create, clone, local path, rename, relocate, archive/restore/delete, colors,
+                    repository identity, and worktrees.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Connections</b>
+                  <p>
+                    Pairing, local/LAN/SSH/Tailscale/relay presentation, auth expiry, version skew,
+                    and hosted restrictions.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Thread creation</b>
+                  <p>
+                    Draft restoration, setup scripts, branch/worktree choices, outbox pending tasks,
+                    and failure recovery.
+                  </p>
+                </div>
+              </div>
+              <div class="exit">
+                <strong>Exit gate:</strong> the same project can be found, opened, edited, and used
+                to start a thread on web/Electron and iOS across connected, reconnecting, offline,
+                and auth-expired states.
+              </div>
+            </div>
+          </article>
+
+          <article class="panel phase" data-critical="true">
+            <div class="phase-meta">
+              <span class="phase-number">05</span>
+              <h3>Threads and agents slice</h3>
+              <p>6 focused change sets</p>
+            </div>
+            <div class="phase-body">
+              <p class="phase-goal">
+                Reach provider and conversation parity before rebuilding secondary tools.
+              </p>
+              <div class="changes">
+                <div class="change">
+                  <b>Timeline</b>
+                  <p>
+                    Snapshot/live handoff, scroll anchoring, streaming output, activities,
+                    checkpoints, restart, and reconnect.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Composer</b>
+                  <p>
+                    Long prompts, images, file/terminal context, commands, traits, model/mode
+                    selection, and outbox recovery.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Interactions</b>
+                  <p>
+                    Approvals, structured user input, keyboard focus, notification navigation, and
+                    failure retry.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Plans</b>
+                  <p>
+                    Plan Mode, proposed-plan marking, implementation handoff, and separate
+                    implementation threads.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Providers</b>
+                  <p>
+                    Codex, Claude, Cursor, and OpenCode instance/status parity with capability
+                    absence handled explicitly.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Quota</b>
+                  <p>
+                    Initial Codex snapshot, sparse merges, all buckets, duration labels, expiry,
+                    auth, loading, and unavailable states.
+                  </p>
+                </div>
+              </div>
+              <div class="exit">
+                <strong>Exit gate:</strong> all four providers complete representative turns on both
+                clients; switching threads during a stream causes no duplicated or lost content.
+              </div>
+            </div>
+          </article>
+
+          <article class="panel phase" data-critical="false">
+            <div class="phase-meta">
+              <span class="phase-number">06</span>
+              <h3>Workspace tools</h3>
+              <p>6 vertical slices</p>
+            </div>
+            <div class="phase-body">
+              <p class="phase-goal">
+                Move tools in dependency order, reusing native iOS implementations and Electron
+                capabilities.
+              </p>
+              <div class="changes">
+                <div class="change">
+                  <b>Files</b>
+                  <p>
+                    Browse, preview, edit, save conflicts, annotations, external editor, and asset
+                    URLs.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Review</b>
+                  <p>
+                    Turn/full-thread diffs, comments, changed files, checkpoints, revert, and native
+                    diff performance.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Git and source control</b>
+                  <p>
+                    Status, refs, worktrees, commit, pull/push, stacked actions, repository
+                    publishing, and PRs.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Terminal</b>
+                  <p>
+                    Create, attach, replay, resize, clear, restart, metadata, background
+                    transitions, and native terminal.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Preview</b>
+                  <p>
+                    Tabs, navigation, viewport presets, automation host focus, recording, and
+                    annotations.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Settings</b>
+                  <p>
+                    Providers, permissions, diagnostics, keybindings, source control, updates, and
+                    environment management.
+                  </p>
+                </div>
+              </div>
+              <div class="exit">
+                <strong>Exit gate:</strong> each slice passes its web, Electron, iPhone, iPad,
+                capability-absence, reconnect, and error scenarios before the next slice begins.
+              </div>
+            </div>
+          </article>
+
+          <article class="panel phase" data-critical="false">
+            <div class="phase-meta">
+              <span class="phase-number">07</span>
+              <h3>Platform integrations</h3>
+              <p>3 parallel audit tracks</p>
+            </div>
+            <div class="phase-body">
+              <p class="phase-goal">
+                Restore platform behavior without leaking desktop or custom-fork assumptions into
+                hosted web.
+              </p>
+              <div class="changes">
+                <div class="change">
+                  <b>Electron</b>
+                  <p>
+                    Window chrome, menus, updater isolation, permissions, SSH/WSL, deep links,
+                    browser host, ad-hoc signing.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>iOS</b>
+                  <p>
+                    Widgets, Live Activities, APNs, sharing, shortcuts, camera pairing, secure
+                    storage, Clerk, signing, app groups.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Remote and Android</b>
+                  <p>
+                    Loopback + Tailscale Serve only, hosted pairing boundaries, Android
+                    typecheck/build, core-navigation smoke.
+                  </p>
+                </div>
+              </div>
+              <div class="exit">
+                <strong>Exit gate:</strong> official hosted branding stays official; goncalloramos
+                identity, data isolation, icon, app IDs, schemes, and updater safeguards remain
+                intact.
+              </div>
+            </div>
+          </article>
+
+          <article class="panel phase" data-critical="true">
+            <div class="phase-meta">
+              <span class="phase-number">08</span>
+              <h3>Migration, cutover, and release</h3>
+              <p>Strictly sequential</p>
+            </div>
+            <div class="phase-body">
+              <p class="phase-goal">
+                Prove data safety, remove the rollback flag only after parity, then create—not
+                distribute—the final artifacts.
+              </p>
+              <div class="changes">
+                <div class="change">
+                  <b>Preference migration</b>
+                  <p>
+                    Version documents, retain old backups, preserve environments, credentials,
+                    drafts, outbox, and desktop catalog.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Database fixtures</b>
+                  <p>
+                    Open representative pre-0.29 SQLite states and prove projects, threads,
+                    messages, activities, plans, and checkpoints survive.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Parity freeze</b>
+                  <p>
+                    Run the manual matrix, capture final screenshots/timings, and record rollback
+                    artifacts.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Cutover</b>
+                  <p>
+                    Make next the only shell; remove legacy components, adapters, duplicated logic,
+                    and the temporary flag.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Version consolidation</b>
+                  <p>
+                    Set server/web/desktop/contracts and custom iOS marketing version to 0.29.0 from
+                    one release source.
+                  </p>
+                </div>
+                <div class="change">
+                  <b>Artifact validation</b>
+                  <p>
+                    Build/verify DMG, codesign mounted app, archive private iOS Release, validate
+                    entitlements and launch.
+                  </p>
+                </div>
+              </div>
+              <div class="exit">
+                <strong>Exit gate:</strong> all acceptance criteria pass. Publishing, pushing
+                <code>main</code>, iOS submission, and distribution still require separate approval.
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="rules">
+        <div class="section-head">
+          <div>
+            <h2>Change-set rules</h2>
+            <p>These constraints keep the large rebuild reviewable and reversible.</p>
+          </div>
+        </div>
+        <div class="checklist">
+          <div class="check done">Start from a clean worktree and name the affected domain.</div>
+          <div class="check done">Keep contracts schema-only and identifiers unchanged.</div>
+          <div class="check">Add focused compatibility tests before moving the next owner.</div>
+          <div class="check">Keep central scope enforcement and RPC instrumentation.</div>
+          <div class="check">Test both UI generations until the cutover phase.</div>
+          <div class="check">Do not mix server extraction with presentation rewrites.</div>
+          <div class="check">Do not move native modules into shared runtime.</div>
+          <div class="check">Preserve cached snapshots during reconnect and mark them stale.</div>
+          <div class="check">Never delete project or thread history in migration code.</div>
+        </div>
+      </section>
+
+      <section class="section" id="gates">
+        <div class="section-head">
+          <div>
+            <h2>Verification ladder</h2>
+            <p>Focused feedback runs per change set; broader gates run at milestone boundaries.</p>
+          </div>
+        </div>
+        <div class="panel table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Cadence</th>
+                <th>Required checks</th>
+                <th>Failure policy</th>
+                <th>Evidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Every change set</td>
+                <td>Formatter/linter on touched files, package typecheck, focused tests</td>
+                <td>Fix before commit</td>
+                <td>Test names lock identifiers, scopes, ordering, errors, or UI behavior</td>
+              </tr>
+              <tr>
+                <td>Every vertical slice</td>
+                <td>Web + mobile unit tests, both UI generations, responsive/a11y checks</td>
+                <td>Do not begin the next slice</td>
+                <td>Fixture parity and scenario checklist</td>
+              </tr>
+              <tr>
+                <td>Every milestone</td>
+                <td>
+                  <code>vp test</code>, <code>vp check</code>, <code>vp run typecheck</code>,
+                  <code>vp run lint:mobile</code>
+                </td>
+                <td>Milestone remains open</td>
+                <td>Clean worktree and recorded warnings/blockers</td>
+              </tr>
+              <tr>
+                <td>Platform freeze</td>
+                <td>
+                  Electron smoke, iOS simulator/device, screenshot harness, Android regression,
+                  Remote Mode
+                </td>
+                <td>No cutover</td>
+                <td>Screenshots, timings, logs, signing and entitlement reports</td>
+              </tr>
+              <tr>
+                <td>Final release candidate</td>
+                <td>
+                  DMG verify + codesign, iOS Release archive/on-device launch, full parity matrix
+                </td>
+                <td>No distribution</td>
+                <td>Validated artifacts retained locally for explicit approval</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="risks">
+        <div class="section-head">
+          <div><h2>Risk register and decision points</h2></div>
+        </div>
+        <div class="two-col">
+          <article class="panel card">
+            <h3>Highest technical risks</h3>
+            <ol>
+              <li>
+                <strong>Duplicate state ownership:</strong> stop UI expansion if web/mobile bypass
+                the shared workspace model.
+              </li>
+              <li>
+                <strong>Stream handoff regressions:</strong> orchestration extraction stays last and
+                requires replay/concurrency tests.
+              </li>
+              <li>
+                <strong>Migration loss:</strong> test real pre-0.29 fixtures and retain old
+                preference documents.
+              </li>
+              <li>
+                <strong>Platform leakage:</strong> capability checks—not global platform
+                branches—own desktop/iOS differences.
+              </li>
+              <li>
+                <strong>Native toolchain:</strong> repair the current
+                <code>React-Core-prebuilt</code> CocoaPods metadata blocker before screenshot
+                freeze.
+              </li>
+            </ol>
+          </article>
+          <article class="panel card">
+            <h3>Explicit review checkpoints</h3>
+            <ol>
+              <li>Review the final RPC registry shape before runtime wiring.</li>
+              <li>Approve fixture parity before migrating web selectors.</li>
+              <li>Approve web/iPhone/iPad shells before thread presentation work.</li>
+              <li>Review each workspace-tool slice independently.</li>
+              <li>Review migration reports before deleting legacy.</li>
+              <li>Approve validated DMG and iOS archive before any publication action.</li>
+            </ol>
+          </article>
+        </div>
+      </section>
+
+      <footer class="footer">
+        Prepared from local <code>main</code> after commit <code>fa4f7fc96</code>. Current merge
+        base with <code>upstream/main</code>: <code>1735e27d9e5106bbb35d5b1dd10363604a54b69e</code>.
+        This document is a working implementation roadmap, not a release approval.
+      </footer>
+    </div>
+    <script>
+      const root = document.documentElement;
+      const allButton = document.getElementById("allPhases");
+      const criticalButton = document.getElementById("criticalOnly");
+      const themeButton = document.getElementById("themeToggle");
+      const phases = [...document.querySelectorAll(".phase")];
+
+      function showCriticalOnly(enabled) {
+        phases.forEach((phase) => {
+          phase.hidden = enabled && phase.dataset.critical !== "true";
+        });
+        allButton.setAttribute("aria-pressed", String(!enabled));
+        criticalButton.setAttribute("aria-pressed", String(enabled));
+      }
+      allButton.addEventListener("click", () => showCriticalOnly(false));
+      criticalButton.addEventListener("click", () => showCriticalOnly(true));
+      themeButton.addEventListener("click", () => {
+        const dark = root.dataset.theme !== "dark";
+        root.dataset.theme = dark ? "dark" : "light";
+        themeButton.textContent = dark ? "Light" : "Dark";
+        themeButton.setAttribute("aria-pressed", String(dark));
+      });
+    </script>
+  </body>
+</html>
