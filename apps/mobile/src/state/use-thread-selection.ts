@@ -1,5 +1,5 @@
 import { useRoute, type RouteProp } from "@react-navigation/native";
-import { useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import {
   EnvironmentId,
   type OrchestrationThread,
@@ -8,10 +8,11 @@ import {
   type ScopedThreadRef,
 } from "@t3tools/contracts";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/shell";
+import { WorkspaceCommands } from "@t3tools/client-runtime/workspace";
 import * as Option from "effect/Option";
 
-import { useProject, useThreadShell } from "../state/entities";
 import { useEnvironmentThread } from "../state/threads";
+import { runWorkspaceCommand, useWorkspaceProject, useWorkspaceThread } from "../state/workspace";
 import {
   useRemoteEnvironmentRuntime,
   useSavedRemoteConnection,
@@ -85,7 +86,7 @@ function useResolvedThreadSelection(params: ThreadSelectionRouteParams | undefin
     lastRouteThreadRef.current = routeThreadRef;
   }
   const selectedThreadRef = routeThreadRef ?? lastRouteThreadRef.current;
-  const selectedThreadShell = useThreadShell(selectedThreadRef);
+  const selectedThreadShell = useWorkspaceThread(selectedThreadRef);
   const selectedThreadDetailState = useEnvironmentThread(
     selectedThreadRef?.environmentId ?? null,
     selectedThreadRef?.threadId ?? null,
@@ -109,7 +110,13 @@ function useResolvedThreadSelection(params: ThreadSelectionRouteParams | undefin
           },
     [selectedThread],
   );
-  const selectedThreadProject = useProject(selectedProjectRef);
+  const selectedThreadProject = useWorkspaceProject(selectedProjectRef);
+  useEffect(() => {
+    if (selectedThreadRef === null) return;
+    void runWorkspaceCommand(
+      WorkspaceCommands.selectThread(selectedThreadRef.environmentId, selectedThreadRef.threadId),
+    );
+  }, [selectedThreadRef]);
   const selectedEnvironmentId = selectedThread?.environmentId ?? null;
   const selectedEnvironmentConnection = useSavedRemoteConnection(selectedEnvironmentId);
   const selectedEnvironmentRuntime = useRemoteEnvironmentRuntime(selectedEnvironmentId);

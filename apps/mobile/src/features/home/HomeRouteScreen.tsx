@@ -6,9 +6,12 @@ import { useMemo, useState } from "react";
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import { renderCompactBrandTitle } from "../../components/CompactBrandTitle";
 import { currentUiGeneration } from "../../lib/currentUiGeneration";
-import { useProjects, useThreadShells } from "../../state/entities";
 import { usePendingNewTasks } from "../../state/use-pending-new-tasks";
-import { useWorkspaceState } from "../../state/workspace";
+import {
+  useWorkspaceProjects,
+  useWorkspaceState,
+  useWorkspaceThreads,
+} from "../../state/workspace";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
 import { useAdaptiveWorkspaceLayout } from "../layout/AdaptiveWorkspaceLayout";
 import { WorkspaceEmptyDetail } from "../layout/WorkspaceEmptyDetail";
@@ -24,8 +27,8 @@ import { useThreadListActions } from "./useThreadListActions";
 
 export function HomeRouteScreen() {
   const { layout } = useAdaptiveWorkspaceLayout();
-  const projects = useProjects();
-  const threads = useThreadShells();
+  const projects = useWorkspaceProjects();
+  const threads = useWorkspaceThreads();
   const { state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const navigation = useNavigation();

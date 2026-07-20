@@ -20,9 +20,12 @@ import { SymbolView } from "../../components/AppSymbol";
 import { NativeStackScreenOptions } from "../../native/StackHeader";
 import { scopedProjectKey, scopedThreadKey } from "../../lib/scopedEntities";
 import { useThemeColor } from "../../lib/useThemeColor";
-import { useProjects, useThreadShells } from "../../state/entities";
 import { usePendingNewTasks } from "../../state/use-pending-new-tasks";
-import { useWorkspaceState } from "../../state/workspace";
+import {
+  useWorkspaceProjects,
+  useWorkspaceState,
+  useWorkspaceThreads,
+} from "../../state/workspace";
 import { useSavedRemoteConnections } from "../../state/use-remote-environment-registry";
 import { useHardwareKeyboardCommand } from "../keyboard/hardwareKeyboardCommands";
 import {
@@ -158,8 +161,8 @@ function ThreadNavigationSidebarPane(
 ) {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme() === "dark" ? "dark" : "light";
-  const projects = useProjects();
-  const threads = useThreadShells();
+  const projects = useWorkspaceProjects();
+  const threads = useWorkspaceThreads();
   const { state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const [headerIsOverContent, setHeaderIsOverContent] = useState(false);

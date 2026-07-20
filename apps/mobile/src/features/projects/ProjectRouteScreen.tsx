@@ -1,5 +1,5 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { workspaceAgentState } from "@t3tools/client-runtime/workspace";
+import { WorkspaceCommands, workspaceAgentState } from "@t3tools/client-runtime/workspace";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { type StaticScreenProps, useNavigation } from "@react-navigation/native";
 import { useEffect, useMemo } from "react";
@@ -9,7 +9,11 @@ import { SymbolView } from "../../components/AppSymbol";
 import { AppText as Text } from "../../components/AppText";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { useThemeColor } from "../../lib/useThemeColor";
-import { useProject, useThreadShells } from "../../state/entities";
+import {
+  runWorkspaceCommand,
+  useWorkspaceProject,
+  useWorkspaceProjectThreads,
+} from "../../state/workspace";
 import { relativeTime } from "../../lib/time";
 import { currentUiGeneration } from "../../lib/currentUiGeneration";
 
@@ -41,19 +45,22 @@ function NextProjectRouteScreen({ route }: StaticScreenProps<ProjectRouteParams>
   const navigation = useNavigation();
   const environmentId = route.params.environmentId as EnvironmentId;
   const projectId = route.params.projectId as ProjectId;
-  const project = useProject(scopeProjectRef(environmentId, projectId));
-  const allThreads = useThreadShells();
+  const projectRef = useMemo(
+    () => scopeProjectRef(environmentId, projectId),
+    [environmentId, projectId],
+  );
+  const project = useWorkspaceProject(projectRef);
+  const projectThreads = useWorkspaceProjectThreads(projectRef);
   const separatorColor = useThemeColor("--color-separator");
   const iconColor = useThemeColor("--color-icon-muted");
   const threads = useMemo(
-    () =>
-      allThreads
-        .filter(
-          (thread) => thread.environmentId === environmentId && thread.projectId === projectId,
-        )
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
-    [allThreads, environmentId, projectId],
+    () => [...projectThreads].sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    [projectThreads],
   );
+
+  useEffect(() => {
+    void runWorkspaceCommand(WorkspaceCommands.selectProject(environmentId, projectId));
+  }, [environmentId, projectId]);
 
   if (!project) {
     return (
