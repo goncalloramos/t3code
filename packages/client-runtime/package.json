@@ -39,6 +39,10 @@
       "types": "./src/platform/index.ts",
       "default": "./src/platform/index.ts"
     },
+    "./workspace": {
+      "types": "./src/workspace/index.ts",
+      "default": "./src/workspace/index.ts"
+    },
     "./relay": {
       "types": "./src/relay/index.ts",
       "default": "./src/relay/index.ts"
