@@ -2,7 +2,7 @@ diff --git a/ios/EXUpdates.podspec b/ios/EXUpdates.podspec
 index b7f3598c6c53c7f4d83ea30e008358e0365bbf6d..48b5eb87d12253b6d8f59831907ccd802965003d 100644
 --- a/ios/EXUpdates.podspec
 +++ b/ios/EXUpdates.podspec
-@@ -115,7 +115,7 @@ Pod::Spec.new do |s|
+@@ -115,6 +115,6 @@ Pod::Spec.new do |s|
      force_bundling_flag = ex_updates_native_debug ? "export FORCE_BUNDLING=1\n" : ""
      s.script_phase = {
        :name => 'Generate updates resources for expo-updates',
