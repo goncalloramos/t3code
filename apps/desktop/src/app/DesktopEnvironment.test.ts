@@ -52,9 +52,9 @@ describe("DesktopEnvironment", () => {
 
       assert.equal(environment.isDevelopment, true);
       assert.deepEqual(environment.branding, {
-        baseName: "T3 Code Custom",
+        baseName: "T3 Code - goncalloramos",
         stageLabel: "Dev",
-        displayName: "T3 Code Custom (Dev)",
+        displayName: "T3 Code - goncalloramos (Dev)",
       });
       assert.equal(environment.appDataDirectory, "/Users/alice/Library/Application Support");
       assert.equal(environment.baseDir, "/tmp/t3");
@@ -69,8 +69,8 @@ describe("DesktopEnvironment", () => {
       assert.equal(environment.appRoot, "/repo");
       assert.equal(environment.backendEntryPath, "/repo/apps/server/dist/bin.mjs");
       assert.equal(environment.backendCwd, "/repo");
-      assert.equal(environment.appUserModelId, "com.goncalloramos.t3code-custom.dev");
-      assert.equal(environment.linuxWmClass, "t3code-custom-dev");
+      assert.equal(environment.appUserModelId, "com.goncalloramos.t3code.dev");
+      assert.equal(environment.linuxWmClass, "t3code-goncalloramos-dev");
       assert.deepEqual(
         Option.map(environment.devServerUrl, (url) => url.href),
         Option.some("http://localhost:5173/"),
@@ -94,9 +94,9 @@ describe("DesktopEnvironment", () => {
 
       assert.equal(environment.isDevelopment, false);
       assert.deepEqual(environment.branding, {
-        baseName: "T3 Code Custom",
-        stageLabel: "Custom",
-        displayName: "T3 Code Custom",
+        baseName: "T3 Code - goncalloramos",
+        stageLabel: "Stable",
+        displayName: "T3 Code - goncalloramos",
       });
       assert.equal(environment.stateDir, "/tmp/t3/userdata");
       assert.equal(environment.logDir, "/tmp/t3/userdata/logs");
@@ -116,6 +116,19 @@ describe("DesktopEnvironment", () => {
       );
 
       assert.equal(environment.appUserModelId, "com.t3tools.t3code.dev.local");
+    }),
+  );
+
+  it.effect("uses the isolated goncalloramos runtime and desktop identifiers by default", () =>
+    Effect.gen(function* () {
+      const environment = yield* makeEnvironment();
+      assert.equal(environment.baseDir, "/Users/alice/.t3-goncalloramos");
+      assert.equal(environment.legacyBaseDir, "/Users/alice/.t3");
+      assert.isTrue(environment.shouldMigrateRuntimeHome);
+      assert.equal(environment.appUserModelId, "com.goncalloramos.t3code");
+      assert.equal(environment.linuxDesktopEntryName, "t3code-goncalloramos.desktop");
+      assert.equal(environment.linuxWmClass, "t3code-goncalloramos");
+      assert.equal(environment.userDataDirName, "T3 Code - goncalloramos");
     }),
   );
 

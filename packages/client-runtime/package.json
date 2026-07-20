@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./chat-images": {
+      "types": "./src/chatImages.ts",
+      "default": "./src/chatImages.ts"
+    },
     "./connection": {
       "types": "./src/connection/index.ts",
       "default": "./src/connection/index.ts"

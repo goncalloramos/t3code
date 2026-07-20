@@ -44,6 +44,8 @@ const electronAppLayer = Layer.succeed(ElectronApp.ElectronApp, {
   setAsDefaultProtocolClient: () => Effect.succeed(true),
   setDesktopName: () => Effect.void,
   setDockIcon: () => Effect.void,
+  getLoginItemSettings: Effect.succeed({ openAtLogin: false } as Electron.LoginItemSettings),
+  setLoginItemSettings: () => Effect.void,
   appendCommandLineSwitch: () => Effect.void,
   on: () => Effect.void,
 } satisfies ElectronApp.ElectronApp["Service"]);

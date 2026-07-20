@@ -11,10 +11,13 @@ import type * as PlatformError from "effect/PlatformError";
 
 import { OrchestrationCommandInvariantError } from "./Errors.ts";
 import {
+  findActiveProjectByWorkspaceRoot,
   listThreadsByProjectId,
   requireActiveProjectWorkspaceRootAbsent,
+  requireActiveProject,
   requireProject,
   requireProjectAbsent,
+  requireProjectRelocationIdle,
   requireThread,
   requireThreadArchived,
   requireThreadAbsent,
@@ -169,10 +172,116 @@ export const decideOrchestrationCommand = Effect.fn("decideOrchestrationCommand"
           ...(command.defaultModelSelection !== undefined
             ? { defaultModelSelection: command.defaultModelSelection }
             : {}),
+          ...(command.color !== undefined ? { color: command.color } : {}),
           ...(command.scripts !== undefined ? { scripts: command.scripts } : {}),
           updatedAt: occurredAt,
         },
       };
+    }
+
+    case "project.relocate": {
+      const sourceProject = yield* requireActiveProject({
+        readModel,
+        command,
+        projectId: command.projectId,
+      });
+      yield* requireProjectRelocationIdle({
+        readModel,
+        command,
+        projectId: command.projectId,
+      });
+
+      const destinationProject = findActiveProjectByWorkspaceRoot(readModel, command.workspaceRoot);
+      if (destinationProject?.id === sourceProject.id) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Project '${sourceProject.id}' already uses workspace root '${command.workspaceRoot}'.`,
+        });
+      }
+
+      const occurredAt = yield* nowIso;
+      if (!destinationProject) {
+        return {
+          ...(yield* withEventBase({
+            aggregateKind: "project",
+            aggregateId: sourceProject.id,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "project.meta-updated" as const,
+          payload: {
+            projectId: sourceProject.id,
+            workspaceRoot: command.workspaceRoot,
+            updatedAt: occurredAt,
+          },
+        };
+      }
+
+      if (!command.mergeOnConflict) {
+        return yield* new OrchestrationCommandInvariantError({
+          commandType: command.type,
+          detail: `Active project '${destinationProject.id}' already exists for workspace root '${command.workspaceRoot}'. Retry with mergeOnConflict=true to merge safely.`,
+        });
+      }
+
+      const destinationScriptIds = new Set(destinationProject.scripts.map((script) => script.id));
+      const mergedScripts = [
+        ...destinationProject.scripts,
+        ...sourceProject.scripts.filter((script) => !destinationScriptIds.has(script.id)),
+      ];
+      const sourceThreads = listThreadsByProjectId(readModel, sourceProject.id).filter(
+        (thread) => thread.deletedAt === null,
+      );
+      const plannedEvents: PlannedOrchestrationEvent[] = [];
+
+      if (mergedScripts.length !== destinationProject.scripts.length) {
+        plannedEvents.push({
+          ...(yield* withEventBase({
+            aggregateKind: "project",
+            aggregateId: destinationProject.id,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "project.meta-updated",
+          payload: {
+            projectId: destinationProject.id,
+            scripts: mergedScripts,
+            updatedAt: occurredAt,
+          },
+        });
+      }
+
+      for (const thread of sourceThreads) {
+        plannedEvents.push({
+          ...(yield* withEventBase({
+            aggregateKind: "thread",
+            aggregateId: thread.id,
+            occurredAt,
+            commandId: command.commandId,
+          })),
+          type: "thread.project-updated",
+          payload: {
+            threadId: thread.id,
+            projectId: destinationProject.id,
+            updatedAt: occurredAt,
+          },
+        });
+      }
+
+      plannedEvents.push({
+        ...(yield* withEventBase({
+          aggregateKind: "project",
+          aggregateId: sourceProject.id,
+          occurredAt,
+          commandId: command.commandId,
+        })),
+        type: "project.deleted",
+        payload: {
+          projectId: sourceProject.id,
+          deletedAt: occurredAt,
+        },
+      });
+      return plannedEvents;
     }
 
     case "project.delete": {

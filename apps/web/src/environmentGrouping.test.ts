@@ -47,6 +47,46 @@ function makeProject(overrides: Partial<Project> = {}): Project {
 }
 
 describe("environment grouping", () => {
+  it("uses a unanimous explicit title for a grouped repository", () => {
+    const titledIdentity = { ...repositoryIdentity, displayName: "upstream/shared-repo" };
+    const snapshots = buildSidebarProjectSnapshots({
+      projects: [
+        makeProject({ title: "T3 Code - goncalloramos", repositoryIdentity: titledIdentity }),
+        makeProject({
+          id: ProjectId.make("project-remote"),
+          environmentId: remoteEnvironmentId,
+          title: "T3 Code - goncalloramos",
+          repositoryIdentity: titledIdentity,
+        }),
+      ],
+      settings: defaultGroupingSettings,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: () => null,
+    });
+
+    expect(snapshots[0]?.displayName).toBe("T3 Code - goncalloramos");
+  });
+
+  it("falls back to repository identity when grouped project titles differ", () => {
+    const titledIdentity = { ...repositoryIdentity, displayName: "upstream/shared-repo" };
+    const snapshots = buildSidebarProjectSnapshots({
+      projects: [
+        makeProject({ title: "Local title", repositoryIdentity: titledIdentity }),
+        makeProject({
+          id: ProjectId.make("project-remote"),
+          environmentId: remoteEnvironmentId,
+          title: "Remote title",
+          repositoryIdentity: titledIdentity,
+        }),
+      ],
+      settings: defaultGroupingSettings,
+      primaryEnvironmentId,
+      resolveEnvironmentLabel: () => null,
+    });
+
+    expect(snapshots[0]?.displayName).toBe("upstream/shared-repo");
+  });
+
   it("groups matching repository identities across environments", () => {
     const primary = makeProject({ repositoryIdentity });
     const remote = makeProject({

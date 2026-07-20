@@ -14,6 +14,7 @@ const loadedFaviconUrls = new Set<string>();
 export function ProjectFavicon(props: {
   readonly environmentId: EnvironmentId;
   readonly open?: boolean;
+  readonly fallbackTintColor?: string;
   readonly size?: number;
   readonly projectTitle: string;
   readonly workspaceRoot?: string | null;
@@ -31,6 +32,7 @@ export function ProjectFavicon(props: {
     <ProjectFaviconImage
       key={faviconUrl}
       faviconUrl={renderableFaviconUrl}
+      fallbackTintColor={props.fallbackTintColor}
       open={props.open}
       projectTitle={props.projectTitle}
       size={size}
@@ -40,6 +42,7 @@ export function ProjectFavicon(props: {
 
 function ProjectFaviconImage(props: {
   readonly faviconUrl: string | null;
+  readonly fallbackTintColor?: string;
   readonly open?: boolean;
   readonly projectTitle: string;
   readonly size: number;
@@ -66,7 +69,7 @@ function ProjectFaviconImage(props: {
         <SymbolView
           name={{ ios: "folder.fill", android: props.open ? "folder_open" : "folder" }}
           size={props.size * 0.78}
-          tintColor={iconMuted}
+          tintColor={props.fallbackTintColor ?? iconMuted}
           type="monochrome"
         />
       ) : null}

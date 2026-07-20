@@ -1,6 +1,9 @@
 #!/usr/bin/env node
+// @effect-diagnostics nodeBuiltinImport:off
 
+import * as NodeFSP from "node:fs/promises";
 import * as NodeModule from "node:module";
+import * as NodePath from "node:path";
 
 import { fromYaml } from "@t3tools/shared/schemaYaml";
 import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
@@ -19,6 +22,7 @@ import {
 import { getDefaultBuildArch } from "./lib/build-target-arch.ts";
 import { loadRepoEnv } from "./lib/public-config.ts";
 import { resolveCatalogDependencies } from "./lib/resolve-catalog.ts";
+import { GONCALLORAMOS_PRODUCT_IDENTITY } from "./lib/product-identity.ts";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import * as NodeServices from "@effect/platform-node/NodeServices";
@@ -35,7 +39,7 @@ import { Command, Flag } from "effect/unstable/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 const LINUX_ICON_SIZES = [16, 22, 24, 32, 48, 64, 128, 256, 512] as const;
-const DESKTOP_APP_ID = "com.goncalloramos.t3code-custom";
+const DESKTOP_APP_ID = GONCALLORAMOS_PRODUCT_IDENTITY.desktopAppId;
 const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const BuildPlatform = Schema.Literals(["mac", "linux", "win"]);
@@ -1336,16 +1340,16 @@ export function resolveDesktopWebAssetBrand(version: string): WebAssetBrand {
 export function resolveDesktopBuildIconAssets(version: string): DesktopBuildIconAssets {
   if (resolveDesktopUpdateChannel(version) === "nightly") {
     return {
-      macIconPng: BRAND_ASSET_PATHS.customMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
+      macIconPng: BRAND_ASSET_PATHS.goncalloramosMacIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.goncalloramosMacIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.goncalloramosWindowsIconIco,
     };
   }
 
   return {
-    macIconPng: BRAND_ASSET_PATHS.customMacIconPng,
-    linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
-    windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+    macIconPng: BRAND_ASSET_PATHS.goncalloramosMacIconPng,
+    linuxIconPng: BRAND_ASSET_PATHS.goncalloramosMacIconPng,
+    windowsIconIco: BRAND_ASSET_PATHS.goncalloramosWindowsIconIco,
   };
 }
 
@@ -1368,8 +1372,21 @@ export function resolvePackageManagerUserAgent(packageManager: string): string {
 
 export function resolveDesktopProductName(version: string): string {
   return resolveDesktopUpdateChannel(version) === "nightly"
-    ? "T3 Code Custom (Nightly)"
+    ? GONCALLORAMOS_PRODUCT_IDENTITY.nightlyDisplayName
     : (desktopPackageJson.productName ?? "T3 Code");
+}
+
+export function resolveMacPackagedExecutablePaths(appOutDir: string, productName: string) {
+  const executableDirectory = NodePath.join(appOutDir, `${productName}.app`, "Contents", "MacOS");
+  return {
+    sourcePath: NodePath.join(executableDirectory, productName),
+    targetPath: NodePath.join(executableDirectory, GONCALLORAMOS_PRODUCT_IDENTITY.executableName),
+  };
+}
+
+async function renameMacPackagedExecutable(appOutDir: string, productName: string): Promise<void> {
+  const paths = resolveMacPackagedExecutablePaths(appOutDir, productName);
+  await NodeFSP.rename(paths.sourcePath, paths.targetPath);
 }
 
 export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
@@ -1389,7 +1406,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   const buildConfig: Record<string, unknown> = {
     appId: DESKTOP_APP_ID,
     productName: resolveDesktopProductName(version),
-    artifactName: "T3-Code-Custom-${version}-${arch}.${ext}",
+    artifactName: GONCALLORAMOS_PRODUCT_IDENTITY.artifactName,
     directories: {
       buildResources: "apps/desktop/resources",
     },
@@ -1422,10 +1439,17 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   }
 
   if (platform === "mac") {
+    const productName = resolveDesktopProductName(version);
+    buildConfig.afterPack = async (context: { readonly appOutDir: string }) => {
+      await renameMacPackagedExecutable(context.appOutDir, productName);
+    };
     buildConfig.mac = {
       target: target === "dmg" ? [target, "zip"] : [target],
       icon: "icon.icns",
       category: "public.app-category.developer-tools",
+      extendInfo: {
+        CFBundleExecutable: GONCALLORAMOS_PRODUCT_IDENTITY.executableName,
+      },
       // Electron's executable arrives with a linker-generated ad-hoc signature.
       // Renaming it for the custom product invalidates that signature, so local
       // builds must explicitly re-sign the completed bundle. A distribution
@@ -1433,8 +1457,8 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
       ...(!signed ? { identity: "-", hardenedRuntime: false } : {}),
       protocols: [
         {
-          name: "T3 Code",
-          schemes: ["t3code", "t3code-dev"],
+          name: GONCALLORAMOS_PRODUCT_IDENTITY.displayName,
+          schemes: [GONCALLORAMOS_PRODUCT_IDENTITY.protocolScheme],
         },
       ],
       ...(macPasskeySigning
@@ -1449,12 +1473,12 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
   if (platform === "linux") {
     buildConfig.linux = {
       target: [target],
-      executableName: "t3code-custom",
+      executableName: GONCALLORAMOS_PRODUCT_IDENTITY.executableName,
       icon: "icons",
       category: "Development",
       desktop: {
         entry: {
-          StartupWMClass: "t3code",
+          StartupWMClass: GONCALLORAMOS_PRODUCT_IDENTITY.linuxWmClass,
         },
       },
     };
@@ -1464,6 +1488,7 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     buildConfig.npmRebuild = false;
     const winConfig: Record<string, unknown> = {
       target: [target],
+      executableName: GONCALLORAMOS_PRODUCT_IDENTITY.executableName,
       icon: "icon.ico",
       // Resource editing applies the product metadata and icon independently
       // of code signing. Disabling it for local unsigned builds leaves the

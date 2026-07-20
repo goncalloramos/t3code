@@ -44,7 +44,7 @@ import {
   shouldSubmitComposerOnEnter,
 } from "../../composer-logic";
 import { deriveComposerSendState, readFileAsDataUrl } from "../ChatView.logic";
-import { resolvePlanImplementationLabel } from "../../customUpstreamUpdate";
+import { resolvePlanImplementationLabel } from "../../goncalloramosUpstreamUpdate";
 import {
   type ComposerImageAttachment,
   type DraftId,

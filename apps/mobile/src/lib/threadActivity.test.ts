@@ -54,6 +54,43 @@ function makeThread(
 }
 
 describe("buildThreadFeed", () => {
+  it("includes embedded generated images in native work-log activities", () => {
+    const thread = makeThread({
+      id: ThreadId.make("thread-images"),
+      projectId: ProjectId.make("project-1"),
+      title: "Generated image",
+      activities: [
+        makeActivity({
+          id: EventId.make("image-generated"),
+          kind: "tool.completed",
+          tone: "tool",
+          summary: "Image view",
+          createdAt: "2026-04-01T00:00:01.000Z",
+          payload: {
+            itemType: "image_view",
+            data: {
+              item: {
+                type: "imageGeneration",
+                savedPath: "/Users/alice/.codex/generated_images/thread/image.png",
+                result: "aW1hZ2U=",
+              },
+            },
+          },
+        }),
+      ],
+    });
+
+    const group = buildThreadFeed(thread)[0];
+    expect(group).toMatchObject({
+      type: "activity-group",
+      activities: [
+        {
+          images: [{ source: "data:image/png;base64,aW1hZ2U=", alt: "Image view" }],
+        },
+      ],
+    });
+  });
+
   it("keeps historic work entries attributed to their turns", () => {
     const thread = makeThread({
       id: ThreadId.make("thread-1"),

@@ -34,7 +34,7 @@ function quotaPresentation(provider: ServerProvider): {
   if (rateLimits.status === "unavailable") {
     return { label: "Codex quota unavailable", state: "unavailable", rateLimits };
   }
-  if (isCodexQuotaExpired(rateLimits)) {
+  if (isCodexQuotaExpired(rateLimits, Date.now())) {
     return { label: "Codex quota data expired", state: "expired", rateLimits };
   }
   return {

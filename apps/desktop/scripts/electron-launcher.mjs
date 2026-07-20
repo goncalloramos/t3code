@@ -7,19 +7,19 @@ import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeURL from "node:url";
 import { ensureElectronRuntime } from "./ensure-electron-runtime.mjs";
+import { GONCALLORAMOS_PRODUCT_IDENTITY } from "../../../scripts/lib/product-identity.ts";
 
 const isDevelopment = Boolean(process.env.VITE_DEV_SERVER_URL);
 const __dirname = NodePath.dirname(NodeURL.fileURLToPath(import.meta.url));
 export const desktopDir = NodePath.resolve(__dirname, "..");
 const repoRoot = NodePath.resolve(desktopDir, "..", "..");
-const devBundleIdSuffix = NodePath.basename(repoRoot)
-  .toLowerCase()
-  .replaceAll(/[^a-z0-9]+/g, "");
-export const APP_DISPLAY_NAME = isDevelopment ? "T3 Code Custom (Dev)" : "T3 Code Custom";
+export const APP_DISPLAY_NAME = isDevelopment
+  ? GONCALLORAMOS_PRODUCT_IDENTITY.developmentDisplayName
+  : GONCALLORAMOS_PRODUCT_IDENTITY.displayName;
 export const APP_BUNDLE_ID = isDevelopment
-  ? `com.t3tools.t3code.dev.${devBundleIdSuffix || "local"}`
-  : "com.t3tools.t3code";
-const APP_PROTOCOL_SCHEMES = isDevelopment ? ["t3code-dev"] : ["t3code"];
+  ? GONCALLORAMOS_PRODUCT_IDENTITY.desktopDevelopmentAppId
+  : GONCALLORAMOS_PRODUCT_IDENTITY.desktopAppId;
+const APP_PROTOCOL_SCHEMES = [GONCALLORAMOS_PRODUCT_IDENTITY.protocolScheme];
 const LAUNCHER_VERSION = 14;
 const defaultIconPath = NodePath.join(desktopDir, "resources", "icon.icns");
 const developmentMacIconPngPath = NodePath.join(

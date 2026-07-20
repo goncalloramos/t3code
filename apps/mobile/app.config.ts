@@ -2,14 +2,18 @@ import type { ExpoConfig } from "expo/config";
 
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
+import { GONCALLORAMOS_PRODUCT_IDENTITY } from "../../scripts/lib/product-identity.ts";
 
-type AppVariant = "development" | "preview" | "production";
+type AppVariant = "development" | "preview" | "production" | "goncalloramos";
 
 const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
+const isGoncalloramosBuild = APP_VARIANT === "goncalloramos";
+const goncalloramosAppleTeamId = repoEnv.T3CODE_APPLE_TEAM_ID?.trim();
+const APPLE_TEAM_ID_PATTERN = /^[A-Z0-9]{10}$/u;
 
 const personalTeamBundleIdentifier = repoEnv.T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID?.trim();
 const IOS_BUNDLE_IDENTIFIER_PATTERN = /^[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+$/;
@@ -23,6 +27,15 @@ if (
 ) {
   throw new Error(
     "T3CODE_IOS_PERSONAL_TEAM_BUNDLE_ID must be a reverse-DNS identifier such as com.example.t3code when T3CODE_IOS_PERSONAL_TEAM=1.",
+  );
+}
+
+if (
+  isGoncalloramosBuild &&
+  (!goncalloramosAppleTeamId || !APPLE_TEAM_ID_PATTERN.test(goncalloramosAppleTeamId))
+) {
+  throw new Error(
+    "T3CODE_APPLE_TEAM_ID must be a 10-character Apple Developer Team ID for goncalloramos mobile builds.",
   );
 }
 
@@ -59,6 +72,17 @@ const RELEASE_ASSETS = {
   androidNotificationColor: "#FFFFFF",
 } as const;
 
+const GONCALLORAMOS_ASSETS = {
+  appIcon: fromRepoRoot(BRAND_ASSET_PATHS.goncalloramosMacIconPng),
+  iosIcon: fromRepoRoot(BRAND_ASSET_PATHS.goncalloramosMacIconPng),
+  splashIcon: fromRepoRoot(BRAND_ASSET_PATHS.goncalloramosMacIconPng),
+  androidAdaptiveForeground: fromRepoRoot(BRAND_ASSET_PATHS.goncalloramosMacIconPng),
+  androidAdaptiveBackgroundColor: "#000000",
+  androidMonochromeIcon: "./assets/android-icon-mark.png",
+  androidNotificationIcon: "./assets/android-notification-icon.png",
+  androidNotificationColor: "#FFFFFF",
+} as const;
+
 const VARIANT_CONFIG = {
   development: {
     appName: "T3 Code Dev",
@@ -84,6 +108,14 @@ const VARIANT_CONFIG = {
     relyingParty: "clerk.t3.codes",
     assets: RELEASE_ASSETS,
   },
+  goncalloramos: {
+    appName: GONCALLORAMOS_PRODUCT_IDENTITY.displayName,
+    scheme: GONCALLORAMOS_PRODUCT_IDENTITY.protocolScheme,
+    iosBundleIdentifier: GONCALLORAMOS_PRODUCT_IDENTITY.mobileAppId,
+    androidPackage: GONCALLORAMOS_PRODUCT_IDENTITY.mobileAppId,
+    relyingParty: null,
+    assets: GONCALLORAMOS_ASSETS,
+  },
 } as const;
 
 function resolveAppVariant(value: string | undefined): AppVariant {
@@ -91,6 +123,7 @@ function resolveAppVariant(value: string | undefined): AppVariant {
     case "development":
     case "preview":
     case "production":
+    case "goncalloramos":
       return value;
     default:
       return "production";
@@ -172,12 +205,14 @@ const config: ExpoConfig = {
   orientation: "portrait",
   icon: variant.assets.appIcon,
   userInterfaceStyle: "automatic",
-  updates: {
-    enabled: true,
-    url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    checkAutomatically: "ON_LOAD",
-    fallbackToCacheTimeout: 0,
-  },
+  updates: isGoncalloramosBuild
+    ? { enabled: false }
+    : {
+        enabled: true,
+        url: "https://u.expo.dev/d763fcb8-d37c-41ea-a773-b54a0ab4a454",
+        checkAutomatically: "ON_LOAD",
+        fallbackToCacheTimeout: 0,
+      },
   ios: {
     icon: variant.assets.iosIcon,
     supportsTablet: true,
@@ -185,17 +220,15 @@ const config: ExpoConfig = {
     // Pin code signing to the T3 Tools team so non-interactive `expo run:ios`
     // does not fall back to a personal team (which cannot sign app groups,
     // Sign in with Apple, or push notification entitlements).
-    appleTeamId: "ARK85ZXQ4Z",
-    associatedDomains: [
-      `applinks:${variant.relyingParty}`,
-      `webcredentials:${variant.relyingParty}`,
-    ],
+    appleTeamId: isGoncalloramosBuild ? goncalloramosAppleTeamId : "ARK85ZXQ4Z",
+    associatedDomains: variant.relyingParty
+      ? [`applinks:${variant.relyingParty}`, `webcredentials:${variant.relyingParty}`]
+      : [],
     infoPlist: {
       NSAppTransportSecurity: {
         NSAllowsArbitraryLoads: true,
       },
-      NSLocalNetworkUsageDescription:
-        "Allow T3 Code to connect to T3 Code servers on your local network or tailnet.",
+      NSLocalNetworkUsageDescription: `Allow ${variant.appName} to connect to T3 Code servers on your local network or tailnet.`,
       ITSAppUsesNonExemptEncryption: false,
     },
   },
@@ -274,7 +307,7 @@ const config: ExpoConfig = {
     [
       "expo-camera",
       {
-        cameraPermission: "Allow T3 Code to access your camera so you can scan pairing QR codes.",
+        cameraPermission: `Allow ${variant.appName} to access your camera so you can scan pairing QR codes.`,
         barcodeScannerEnabled: true,
         recordAudioAndroid: false,
       },
@@ -305,6 +338,7 @@ const config: ExpoConfig = {
         },
       },
     ],
+    "./plugins/withIosSpaceSafeBundleScript.cjs",
     "./plugins/withIosCocoaPodsUuidCache.cjs",
     // Must be listed BEFORE expo-widgets: same-type mods run last-registered-
     // first, so registering earlier makes this plugin's mods run AFTER
@@ -344,11 +378,13 @@ const config: ExpoConfig = {
       tracesDataset: repoEnv.EXPO_PUBLIC_OTLP_TRACES_DATASET ?? null,
       tracesToken: repoEnv.EXPO_PUBLIC_OTLP_TRACES_TOKEN ?? null,
     },
-    eas: {
-      projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454",
-    },
+    ...(!isGoncalloramosBuild
+      ? { eas: { projectId: "d763fcb8-d37c-41ea-a773-b54a0ab4a454" } }
+      : repoEnv.T3CODE_EAS_PROJECT_ID?.trim()
+        ? { eas: { projectId: repoEnv.T3CODE_EAS_PROJECT_ID.trim() } }
+        : {}),
   },
-  owner: "pingdotgg",
+  ...(!isGoncalloramosBuild ? { owner: "pingdotgg" } : {}),
 };
 
 export default config;

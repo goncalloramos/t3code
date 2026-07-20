@@ -1,5 +1,8 @@
+import { GONCALLORAMOS_PRODUCT_IDENTITY } from "./product-identity.ts";
+
 export const BRAND_ASSET_PATHS = {
-  customMacIconPng: "assets/custom/t3-custom-macos-1024.png",
+  goncalloramosMacIconPng: GONCALLORAMOS_PRODUCT_IDENTITY.desktopIconPng,
+  goncalloramosWindowsIconIco: GONCALLORAMOS_PRODUCT_IDENTITY.windowsIconIco,
 
   developmentIconComposerProject: "assets/dev/app-icon.icon",
   developmentIosIconPng: "assets/dev/blueprint-ios-1024.png",

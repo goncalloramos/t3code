@@ -17,8 +17,9 @@ import { CommandPalette } from "../components/CommandPalette";
 import { ConnectOnboardingDialog } from "../components/cloud/ConnectOnboardingDialog";
 import { RelayClientInstallDialog } from "../components/cloud/RelayClientInstallDialog";
 import { SshPasswordPromptDialog } from "../components/desktop/SshPasswordPromptDialog";
+import { DesktopAgentNotifications } from "../components/DesktopAgentNotifications";
 import { ProviderUpdateLaunchNotification } from "../components/ProviderUpdateLaunchNotification";
-import { CustomUpstreamUpdateNotification } from "../components/CustomUpstreamUpdateNotification";
+import { GoncalloramosUpstreamUpdateNotification } from "../components/GoncalloramosUpstreamUpdateNotification";
 import { SlowRpcRequestToastCoordinator } from "../components/SlowRpcRequestToastCoordinator";
 import { Button } from "../components/ui/button";
 import {
@@ -135,8 +136,9 @@ function RootRouteView() {
         <SlowRpcRequestToastCoordinator />
         <HostedStaticEnvironmentBootstrap />
         {primaryEnvironmentAuthenticated ? <EventRouter /> : null}
+        {primaryEnvironmentAuthenticated ? <DesktopAgentNotifications /> : null}
         {primaryEnvironmentAuthenticated ? <ProviderUpdateLaunchNotification /> : null}
-        {primaryEnvironmentAuthenticated ? <CustomUpstreamUpdateNotification /> : null}
+        {primaryEnvironmentAuthenticated ? <GoncalloramosUpstreamUpdateNotification /> : null}
         {appShell}
       </AnchoredToastProvider>
     </ToastProvider>

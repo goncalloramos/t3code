@@ -3,6 +3,7 @@ import type {
   EnvironmentProject,
   EnvironmentThreadShell,
 } from "@t3tools/client-runtime/state/shell";
+import type { ProjectColor } from "@t3tools/contracts";
 import type { MenuAction } from "@react-native-menu/menu";
 import { SymbolView } from "../../components/AppSymbol";
 import { memo, useCallback, useMemo, type ComponentProps } from "react";
@@ -14,8 +15,16 @@ import { AppText as Text } from "../../components/AppText";
 import { ControlPillMenu } from "../../components/ControlPill";
 import { ProjectFavicon } from "../../components/ProjectFavicon";
 import { cn } from "../../lib/cn";
+import {
+  PROJECT_COLORS,
+  colorWithAlpha,
+  projectColorHex,
+  resolveProjectColor,
+} from "../../lib/projectColors";
 import { relativeTime } from "../../lib/time";
 import { useThemeColor } from "../../lib/useThemeColor";
+import { projectEnvironment } from "../../state/projects";
+import { useAtomCommand } from "../../state/use-atom-command";
 import type { PendingNewTask } from "../../state/use-pending-new-tasks";
 import { useThreadPr, type ThreadPr } from "../../state/use-thread-pr";
 import type { HomeGroupDisplayAction } from "../home/homeListItems";
@@ -85,6 +94,8 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
   readonly onNewThread?: (project: EnvironmentProject) => void;
 }) {
   const iconMutedColor = useThemeColor("--color-icon-muted");
+  const colorScheme = useColorScheme();
+  const updateProject = useAtomCommand(projectEnvironment.update);
   const { groupKey, onGroupAction, onNewThread } = props;
   const newThreadTarget = props.newThreadTarget ?? null;
   const compact = props.variant === "compact";
@@ -98,6 +109,30 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
     }
   }, [newThreadTarget, onNewThread]);
   const showNewThreadButton = onNewThread !== undefined && newThreadTarget !== null;
+  const selectedColor = resolveProjectColor(props.project);
+  const projectTint = projectColorHex(selectedColor, colorScheme === "dark");
+  const colorActions = useMemo<MenuAction[]>(
+    () =>
+      PROJECT_COLORS.map((color) => ({
+        id: `project-color:${color}`,
+        title: color[0]!.toUpperCase() + color.slice(1),
+        image: "circle.fill",
+        imageColor: projectColorHex(color, colorScheme === "dark"),
+        state: color === selectedColor ? "on" : "off",
+      })),
+    [colorScheme, selectedColor],
+  );
+  const handleColorAction = useCallback(
+    ({ nativeEvent }: { readonly nativeEvent: { readonly event: string } }) => {
+      const color = nativeEvent.event.replace("project-color:", "") as ProjectColor;
+      if (!PROJECT_COLORS.includes(color) || color === selectedColor || !newThreadTarget) return;
+      void updateProject({
+        environmentId: newThreadTarget.environmentId,
+        input: { projectId: newThreadTarget.id, color },
+      });
+    },
+    [newThreadTarget, selectedColor, updateProject],
+  );
 
   // The new-thread button is a SIBLING of the collapse toggle, not a child:
   // nested touchables are unreachable to VoiceOver/TalkBack (the parent
@@ -109,6 +144,9 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
     <View
       className={compact ? "flex-row items-center bg-screen" : "flex-row items-center"}
       style={{
+        backgroundColor: colorWithAlpha(projectTint, colorScheme === "dark" ? 0.1 : 0.07),
+        borderLeftColor: projectTint,
+        borderLeftWidth: compact ? 4 : 3,
         minHeight: compact ? 44 : 36,
         paddingLeft: compact ? 20 : 12,
         // Compact right padding centers the 20pt plus glyph on the thread
@@ -135,6 +173,7 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
           size={compact ? 22 : 18}
           projectTitle={props.project.title}
           workspaceRoot={props.project.workspaceRoot}
+          fallbackTintColor={projectTint}
         />
         <Text
           className={
@@ -142,6 +181,7 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
               ? "flex-shrink text-base font-t3-bold tracking-[0.2px] text-foreground-muted"
               : "flex-shrink text-sm font-t3-bold tracking-[0.2px] text-foreground-muted"
           }
+          style={{ color: projectTint }}
           numberOfLines={1}
         >
           {props.title}
@@ -156,6 +196,29 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
           {props.threadCount}
         </Text>
       </Pressable>
+      {newThreadTarget ? (
+        <ControlPillMenu
+          actions={colorActions}
+          onPressAction={handleColorAction}
+          title="Project color"
+        >
+          <Pressable
+            accessibilityLabel={`Change color for ${props.title}`}
+            accessibilityRole="button"
+            hitSlop={10}
+            style={{ padding: 8 }}
+          >
+            <View
+              style={{
+                width: compact ? 16 : 14,
+                height: compact ? 16 : 14,
+                borderRadius: 999,
+                backgroundColor: projectTint,
+              }}
+            />
+          </Pressable>
+        </ControlPillMenu>
+      ) : null}
       {showNewThreadButton ? (
         <Pressable
           accessibilityLabel={`Create new thread in ${props.title}`}

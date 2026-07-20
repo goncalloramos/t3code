@@ -91,6 +91,10 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   setTailscaleServeEnabled: (input) =>
     ipcRenderer.invoke(IpcChannels.SET_TAILSCALE_SERVE_ENABLED_CHANNEL, input),
   getAdvertisedEndpoints: () => ipcRenderer.invoke(IpcChannels.GET_ADVERTISED_ENDPOINTS_CHANNEL),
+  getRemoteModeState: () => ipcRenderer.invoke(IpcChannels.GET_REMOTE_MODE_STATE_CHANNEL),
+  setRemoteModePreferences: (preferences) =>
+    ipcRenderer.invoke(IpcChannels.SET_REMOTE_MODE_PREFERENCES_CHANNEL, preferences),
+  retryRemoteMode: () => ipcRenderer.invoke(IpcChannels.RETRY_REMOTE_MODE_CHANNEL),
   getWslState: () => ipcRenderer.invoke(IpcChannels.GET_WSL_STATE_CHANNEL),
   setWslBackendEnabled: (enabled) =>
     ipcRenderer.invoke(IpcChannels.SET_WSL_BACKEND_ENABLED_CHANNEL, enabled),
@@ -105,6 +109,22 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ...(position === undefined ? {} : { position }),
     }),
   openExternal: (url: string) => ipcRenderer.invoke(IpcChannels.OPEN_EXTERNAL_CHANNEL, url),
+  showAgentNotification: (notification) =>
+    ipcRenderer.invoke(IpcChannels.SHOW_AGENT_NOTIFICATION_CHANNEL, notification),
+  onAgentNotificationClick: (listener) => {
+    const wrappedListener = (
+      _event: Electron.IpcRendererEvent,
+      target: Parameters<typeof listener>[0],
+    ) => {
+      if (typeof target !== "object" || target === null) return;
+      listener(target);
+    };
+
+    ipcRenderer.on(IpcChannels.AGENT_NOTIFICATION_CLICK_CHANNEL, wrappedListener);
+    return () => {
+      ipcRenderer.removeListener(IpcChannels.AGENT_NOTIFICATION_CLICK_CHANNEL, wrappedListener);
+    };
+  },
   onMenuAction: (listener) => {
     const wrappedListener = (_event: Electron.IpcRendererEvent, action: unknown) => {
       if (typeof action !== "string") return;

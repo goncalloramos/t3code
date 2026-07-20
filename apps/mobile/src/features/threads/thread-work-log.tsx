@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { type AppSymbolName, SymbolView } from "../../components/AppSymbol";
-import { LayoutAnimation, Pressable, ScrollView, useColorScheme, View } from "react-native";
+import { Image, LayoutAnimation, Pressable, ScrollView, useColorScheme, View } from "react-native";
 
 import { AppText as Text } from "../../components/AppText";
 import { cn } from "../../lib/cn";
@@ -83,6 +83,7 @@ export function ThreadWorkLog(props: {
   readonly expandedRows: Readonly<Record<string, boolean>>;
   readonly iconSubtleColor: import("react-native").ColorValue;
   readonly onCopyRow: (rowId: string, value: string) => void;
+  readonly onPressImage: (uri: string) => void;
   readonly onToggleRow: (rowId: string) => void;
 }) {
   const colorScheme = useColorScheme();
@@ -220,6 +221,27 @@ export function ThreadWorkLog(props: {
                       {row.fullDetail}
                     </Text>
                   </ScrollView>
+                </View>
+              ) : null}
+
+              {(row.images?.length ?? 0) > 0 ? (
+                <View className="mb-2 ml-7 gap-2 pt-1">
+                  {row.images?.map((image) => (
+                    <Pressable
+                      key={image.source}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Preview ${image.alt}`}
+                      onPress={() => props.onPressImage(image.source)}
+                      className="overflow-hidden rounded-xl border border-neutral-300/60 bg-neutral-100 dark:border-white/[0.12] dark:bg-neutral-900"
+                    >
+                      <Image
+                        source={{ uri: image.source }}
+                        accessibilityLabel={image.alt}
+                        resizeMode="contain"
+                        className="h-60 w-full"
+                      />
+                    </Pressable>
+                  ))}
                 </View>
               ) : null}
             </Animated.View>

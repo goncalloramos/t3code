@@ -65,6 +65,8 @@ export class ElectronApp extends Context.Service<
     ) => Effect.Effect<boolean>;
     readonly setDesktopName: (desktopName: string) => Effect.Effect<void>;
     readonly setDockIcon: (iconPath: string) => Effect.Effect<void>;
+    readonly getLoginItemSettings: Effect.Effect<Electron.LoginItemSettings>;
+    readonly setLoginItemSettings: (settings: Electron.Settings) => Effect.Effect<void>;
     readonly appendCommandLineSwitch: (switchName: string, value?: string) => Effect.Effect<void>;
     readonly on: <Args extends ReadonlyArray<unknown>>(
       eventName: string,
@@ -169,6 +171,11 @@ export const make = ElectronApp.of({
   setDockIcon: (iconPath) =>
     Effect.sync(() => {
       Electron.app.dock?.setIcon(iconPath);
+    }),
+  getLoginItemSettings: Effect.sync(() => Electron.app.getLoginItemSettings()),
+  setLoginItemSettings: (settings) =>
+    Effect.sync(() => {
+      Electron.app.setLoginItemSettings(settings);
     }),
   appendCommandLineSwitch: (switchName, value) =>
     Effect.sync(() => {

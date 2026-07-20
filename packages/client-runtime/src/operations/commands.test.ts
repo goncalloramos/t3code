@@ -21,7 +21,7 @@ import {
 import * as EnvironmentSupervisor from "../connection/supervisor.ts";
 import * as RpcSession from "../rpc/session.ts";
 import type { WsRpcProtocolClient } from "../rpc/protocol.ts";
-import { archiveThread, createProject, stopThreadSession } from "./commands.ts";
+import { archiveThread, createProject, relocateProject, stopThreadSession } from "./commands.ts";
 
 const TEST_CRYPTO_LAYER = Layer.succeed(
   Crypto.Crypto,
@@ -130,6 +130,30 @@ describe("environment commands", () => {
           type: "thread.archive",
           commandId: "archive-command",
           threadId: "thread-1",
+        },
+      ]);
+    }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),
+  );
+
+  it.effect("dispatches project relocation with explicit merge intent", () =>
+    Effect.gen(function* () {
+      const dispatched: ClientOrchestrationCommand[] = [];
+      const supervisor = yield* makeSupervisor(dispatched);
+
+      yield* relocateProject({
+        commandId: CommandId.make("relocate-command"),
+        projectId: ProjectId.make("source-project"),
+        workspaceRoot: "/workspace/destination",
+        mergeOnConflict: true,
+      }).pipe(Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor));
+
+      expect(dispatched).toEqual([
+        {
+          type: "project.relocate",
+          commandId: "relocate-command",
+          projectId: "source-project",
+          workspaceRoot: "/workspace/destination",
+          mergeOnConflict: true,
         },
       ]);
     }).pipe(Effect.provide(TEST_CRYPTO_LAYER)),

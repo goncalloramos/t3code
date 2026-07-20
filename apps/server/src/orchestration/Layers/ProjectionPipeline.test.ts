@@ -2608,6 +2608,7 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
         type: "project.meta.update",
         commandId: CommandId.make("cmd-scripts-project-update"),
         projectId: ProjectId.make("project-scripts"),
+        color: "teal",
         scripts: [
           {
             id: "script-1",
@@ -2626,10 +2627,12 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
       const projectRows = yield* sql<{
         readonly scriptsJson: string;
         readonly defaultModelSelection: string;
+        readonly color: string;
       }>`
         SELECT
           scripts_json AS "scriptsJson",
-          default_model_selection_json AS "defaultModelSelection"
+          default_model_selection_json AS "defaultModelSelection",
+          color
         FROM projection_projects
         WHERE project_id = 'project-scripts'
       `;
@@ -2638,8 +2641,76 @@ engineLayer("OrchestrationProjectionPipeline via engine dispatch", (it) => {
           scriptsJson:
             '[{"id":"script-1","name":"Build","command":"bun run build","icon":"build","runOnWorktreeCreate":false}]',
           defaultModelSelection: '{"instanceId":"codex","model":"gpt-5"}',
+          color: "teal",
         },
       ]);
+    }),
+  );
+
+  it.effect("projects merged thread ownership into SQL projections without deleting history", () =>
+    Effect.gen(function* () {
+      const engine = yield* OrchestrationEngineService;
+      const sql = yield* SqlClient.SqlClient;
+      const createdAt = "2026-01-01T00:00:00.000Z";
+      const modelSelection = {
+        instanceId: ProviderInstanceId.make("codex"),
+        model: "gpt-5.4",
+      };
+
+      yield* engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.make("cmd-relocate-source-create"),
+        projectId: ProjectId.make("relocate-source"),
+        title: "Source",
+        workspaceRoot: "/tmp/relocate-source",
+        defaultModelSelection: modelSelection,
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "project.create",
+        commandId: CommandId.make("cmd-relocate-destination-create"),
+        projectId: ProjectId.make("relocate-destination"),
+        title: "Destination",
+        workspaceRoot: "/tmp/relocate-destination",
+        defaultModelSelection: modelSelection,
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "thread.create",
+        commandId: CommandId.make("cmd-relocate-thread-create"),
+        threadId: ThreadId.make("relocate-thread"),
+        projectId: ProjectId.make("relocate-source"),
+        title: "Preserved",
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        branch: null,
+        worktreePath: null,
+        createdAt,
+      });
+      yield* engine.dispatch({
+        type: "project.relocate",
+        commandId: CommandId.make("cmd-relocate-merge"),
+        projectId: ProjectId.make("relocate-source"),
+        workspaceRoot: "/tmp/relocate-destination",
+        mergeOnConflict: true,
+      });
+
+      const threadRows = yield* sql<{
+        readonly projectId: string;
+        readonly deletedAt: string | null;
+      }>`
+        SELECT project_id AS "projectId", deleted_at AS "deletedAt"
+        FROM projection_threads
+        WHERE thread_id = 'relocate-thread'
+      `;
+      const sourceRows = yield* sql<{ readonly deletedAt: string | null }>`
+        SELECT deleted_at AS "deletedAt"
+        FROM projection_projects
+        WHERE project_id = 'relocate-source'
+      `;
+      assert.deepEqual(threadRows, [{ projectId: "relocate-destination", deletedAt: null }]);
+      assert.isNotNull(sourceRows[0]?.deletedAt ?? null);
     }),
   );
 });

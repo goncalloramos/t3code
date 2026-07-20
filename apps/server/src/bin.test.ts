@@ -445,6 +445,23 @@ it.layer(NodeServices.layer)("bin cli parsing", (it) => {
       assert.equal(renamedProject?.title, "Beta");
       assert.equal(renamedProject?.deletedAt, null);
 
+      const movedWorkspaceRoot = NodeFS.mkdtempSync(
+        NodePath.join(NodeOS.tmpdir(), "t3-cli-projects-moved-workspace-"),
+      );
+      yield* runCliWithRuntime([
+        "project",
+        "move",
+        workspaceRoot,
+        movedWorkspaceRoot,
+        "--base-dir",
+        baseDir,
+      ]);
+      const afterMove = yield* readPersistedSnapshot(baseDir);
+      assert.equal(
+        afterMove.projects.find((project) => project.id === addedProject?.id)?.workspaceRoot,
+        movedWorkspaceRoot,
+      );
+
       yield* runCliWithRuntime([
         "project",
         "remove",

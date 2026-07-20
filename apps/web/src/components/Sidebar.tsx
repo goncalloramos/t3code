@@ -58,6 +58,7 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
+import { findProjectByPath } from "@t3tools/client-runtime/state/projects";
 import {
   isAtomCommandInterrupted,
   settlePromise,
@@ -74,7 +75,7 @@ import {
 import { isDesktopLocalConnectionTarget } from "../connection/desktopLocal";
 import { useDesktopLocalBootstraps } from "../connection/useDesktopLocalBootstraps";
 import { isElectron } from "../env";
-import { APP_STAGE_LABEL } from "../branding";
+import { APP_BASE_NAME, APP_STAGE_LABEL } from "../branding";
 import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isMacPlatform } from "../lib/utils";
@@ -1115,6 +1116,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
   const deleteProject = useAtomCommand(projectEnvironment.delete, {
     reportFailure: false,
   });
+  const relocateProject = useAtomCommand(projectEnvironment.relocate, {
+    reportFailure: false,
+  });
   const updateProject = useAtomCommand(projectEnvironment.update, {
     reportFailure: false,
   });
@@ -1122,6 +1126,8 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     reportFailure: false,
   });
   const updateSettings = useUpdateClientSettings();
+  const allProjects = useProjects();
+  const primaryEnvironmentId = usePrimaryEnvironmentId();
   const sidebarThreadPreviewCount = useClientSettings<SidebarThreadPreviewCount>(
     (settings) => settings.sidebarThreadPreviewCount,
   );
@@ -1213,6 +1219,25 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     null,
   );
   const [projectRenameTitle, setProjectRenameTitle] = useState("");
+  const [projectRelocateTarget, setProjectRelocateTarget] =
+    useState<SidebarProjectGroupMember | null>(null);
+  const [projectRelocatePath, setProjectRelocatePath] = useState("");
+  const [isProjectRelocating, setIsProjectRelocating] = useState(false);
+  const projectRelocateDestination = useMemo(() => {
+    if (!projectRelocateTarget) {
+      return null;
+    }
+    return (
+      findProjectByPath(
+        allProjects.filter(
+          (candidate) =>
+            candidate.environmentId === projectRelocateTarget.environmentId &&
+            candidate.id !== projectRelocateTarget.id,
+        ),
+        projectRelocatePath,
+      ) ?? null
+    );
+  }, [allProjects, projectRelocatePath, projectRelocateTarget]);
   const [projectGroupingTarget, setProjectGroupingTarget] =
     useState<SidebarProjectGroupMember | null>(null);
   const [projectGroupingSelection, setProjectGroupingSelection] = useState<
@@ -1425,6 +1450,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     setProjectRenameTitle(member.title);
   }, []);
 
+  const openProjectRelocateDialog = useCallback((member: SidebarProjectGroupMember) => {
+    setProjectRelocateTarget(member);
+    setProjectRelocatePath(member.workspaceRoot);
+  }, []);
+
   const openProjectGroupingDialog = useCallback(
     (member: SidebarProjectGroupMember) => {
       const overrideKey = deriveProjectGroupingOverrideKey(member);
@@ -1598,7 +1628,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
 
         const actionHandlers = new Map<string, () => Promise<void> | void>();
         const makeLeaf = (
-          action: "rename" | "grouping" | "copy-path" | "delete",
+          action: "rename" | "relocate" | "grouping" | "copy-path" | "delete",
           member: SidebarProjectGroupMember,
           options?: {
             destructive?: boolean;
@@ -1610,6 +1640,9 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
             switch (action) {
               case "rename":
                 openProjectRenameDialog(member);
+                return;
+              case "relocate":
+                openProjectRelocateDialog(member);
                 return;
               case "grouping":
                 openProjectGroupingDialog(member);
@@ -1631,7 +1664,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         };
 
         const buildTargetedItem = (
-          action: "rename" | "grouping" | "copy-path" | "delete",
+          action: "rename" | "relocate" | "grouping" | "copy-path" | "delete",
           label: string,
           options?: {
             destructive?: boolean;
@@ -1665,7 +1698,11 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
 
         const clicked = await api.contextMenu.show(
           [
-            buildTargetedItem("rename", "Rename"),
+            buildTargetedItem(
+              "rename",
+              project.memberProjects.length > 1 ? "Rename project member..." : "Rename",
+            ),
+            buildTargetedItem("relocate", "Move or merge..."),
             buildTargetedItem("grouping", "Group into..."),
             buildTargetedItem("copy-path", "Copy Path"),
             buildTargetedItem("delete", "Remove", {
@@ -1689,6 +1726,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       copyPathToClipboard,
       handleRemoveProject,
       openProjectGroupingDialog,
+      openProjectRelocateDialog,
       openProjectRenameDialog,
       project.groupedProjectCount,
       project.memberProjects,
@@ -2042,6 +2080,161 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     setProjectRenameTitle("");
   }, []);
 
+  const closeProjectRelocateDialog = useCallback(() => {
+    if (isProjectRelocating) {
+      return;
+    }
+    setProjectRelocateTarget(null);
+    setProjectRelocatePath("");
+  }, [isProjectRelocating]);
+
+  const browseProjectRelocatePath = useCallback(async () => {
+    if (!projectRelocateTarget || projectRelocateTarget.environmentId !== primaryEnvironmentId) {
+      return;
+    }
+    const api = readLocalApi();
+    if (!api) {
+      return;
+    }
+    try {
+      const selectedPath = await api.dialogs.pickFolder({
+        initialPath: projectRelocatePath || projectRelocateTarget.workspaceRoot,
+      });
+      if (selectedPath) {
+        setProjectRelocatePath(selectedPath);
+      }
+    } catch (error) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "error",
+          title: "Could not choose a project folder",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        }),
+      );
+    }
+  }, [primaryEnvironmentId, projectRelocatePath, projectRelocateTarget]);
+
+  const submitProjectRelocate = useCallback(async () => {
+    if (!projectRelocateTarget || isProjectRelocating) {
+      return;
+    }
+    const workspaceRoot = projectRelocatePath.trim();
+    if (workspaceRoot.length === 0) {
+      toastManager.add({ type: "warning", title: "Project path cannot be empty" });
+      return;
+    }
+    if (workspaceRoot === projectRelocateTarget.workspaceRoot) {
+      toastManager.add({ type: "warning", title: "Choose a different project path" });
+      return;
+    }
+
+    const sourceProjectRef = scopeProjectRef(
+      projectRelocateTarget.environmentId,
+      projectRelocateTarget.id,
+    );
+    const destination = projectRelocateDestination;
+    const destinationProjectRef = destination
+      ? scopeProjectRef(destination.environmentId, destination.id)
+      : null;
+    const draftStore = useComposerDraftStore.getState();
+    if (
+      destinationProjectRef &&
+      draftStore.getDraftThreadByProjectRef(sourceProjectRef) &&
+      draftStore.getDraftThreadByProjectRef(destinationProjectRef)
+    ) {
+      toastManager.add(
+        stackedThreadToast({
+          type: "warning",
+          title: "Both projects have unsent drafts",
+          description: "Send or discard one draft before merging these projects.",
+        }),
+      );
+      return;
+    }
+
+    if (destination) {
+      const api = readLocalApi();
+      if (!api) {
+        return;
+      }
+      const threadCount = memberThreadCountByPhysicalKey.get(
+        projectRelocateTarget.physicalProjectKey,
+      );
+      const confirmed = await api.dialogs.confirm(
+        [
+          `Merge "${projectRelocateTarget.title}" into "${destination.title}"?`,
+          `From: ${projectRelocateTarget.workspaceRoot}`,
+          `To: ${destination.workspaceRoot}`,
+          `${threadCount ?? 0} conversation thread${threadCount === 1 ? "" : "s"} will be preserved.`,
+          "The destination title, model, and other metadata will be kept.",
+          "The source project entry will be retired. No conversation history will be deleted.",
+        ].join("\n"),
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    setIsProjectRelocating(true);
+    const result = await relocateProject({
+      environmentId: projectRelocateTarget.environmentId,
+      input: {
+        projectId: projectRelocateTarget.id,
+        workspaceRoot,
+        mergeOnConflict: destination !== null,
+      },
+    });
+    setIsProjectRelocating(false);
+    if (result._tag === "Failure") {
+      if (!isAtomCommandInterrupted(result)) {
+        const error = squashAtomCommandFailure(result);
+        toastManager.add(
+          stackedThreadToast({
+            type: "error",
+            title: destination ? "Failed to merge projects" : "Failed to move project",
+            description: error instanceof Error ? error.message : "An error occurred.",
+          }),
+        );
+      }
+      return;
+    }
+
+    if (destinationProjectRef) {
+      draftStore.relocateProjectDraft(sourceProjectRef, destinationProjectRef);
+    }
+    const sourceOverrideKey = deriveProjectGroupingOverrideKey(projectRelocateTarget);
+    const destinationOverrideKey = deriveProjectGroupingOverrideKey({
+      environmentId: projectRelocateTarget.environmentId,
+      workspaceRoot: destination?.workspaceRoot ?? workspaceRoot,
+    });
+    const nextOverrides = { ...projectGroupingSettings.sidebarProjectGroupingOverrides };
+    const sourceOverride = nextOverrides[sourceOverrideKey];
+    delete nextOverrides[sourceOverrideKey];
+    if (sourceOverride && nextOverrides[destinationOverrideKey] === undefined) {
+      nextOverrides[destinationOverrideKey] = sourceOverride;
+    }
+    updateSettings({ sidebarProjectGroupingOverrides: nextOverrides });
+
+    setProjectRelocateTarget(null);
+    setProjectRelocatePath("");
+    toastManager.add({
+      type: "success",
+      title: destination ? "Projects merged" : "Project moved",
+      description: destination
+        ? `Conversation history now belongs to ${destination.title}.`
+        : workspaceRoot,
+    });
+  }, [
+    isProjectRelocating,
+    memberThreadCountByPhysicalKey,
+    projectGroupingSettings.sidebarProjectGroupingOverrides,
+    projectRelocateDestination,
+    projectRelocatePath,
+    projectRelocateTarget,
+    relocateProject,
+    updateSettings,
+  ]);
+
   const submitProjectRename = useCallback(async () => {
     if (!projectRenameTarget) {
       return;
@@ -2343,6 +2536,88 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
         expandThreadListForProject={expandThreadListForProject}
         collapseThreadListForProject={collapseThreadListForProject}
       />
+
+      <Dialog
+        open={projectRelocateTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            closeProjectRelocateDialog();
+          }
+        }}
+      >
+        <DialogPopup className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Move or merge project</DialogTitle>
+            <DialogDescription>
+              Choose a new workspace folder. If it already belongs to another project, the
+              conversation history will be merged safely.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogPanel className="space-y-4">
+            <div className="grid gap-1.5">
+              <span className="text-xs font-medium text-foreground">Current path</span>
+              <p className="break-all text-xs text-muted-foreground">
+                {projectRelocateTarget?.workspaceRoot}
+              </p>
+            </div>
+            <div className="grid gap-1.5">
+              <span className="text-xs font-medium text-foreground">Destination path</span>
+              <div className="flex gap-2">
+                <Input
+                  aria-label="Destination project path"
+                  value={projectRelocatePath}
+                  disabled={isProjectRelocating}
+                  onChange={(event) => setProjectRelocatePath(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void submitProjectRelocate();
+                    }
+                  }}
+                />
+                {isElectron && projectRelocateTarget?.environmentId === primaryEnvironmentId ? (
+                  <Button
+                    variant="outline"
+                    disabled={isProjectRelocating}
+                    onClick={() => void browseProjectRelocatePath()}
+                  >
+                    Browse
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+            {projectRelocateDestination ? (
+              <Alert>
+                <AlertTitle>Existing project found</AlertTitle>
+                <AlertDescription>
+                  This will merge into “{projectRelocateDestination.title}” and preserve the source
+                  project’s conversations.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                The project title and conversations will be retained at the new path.
+              </p>
+            )}
+          </DialogPanel>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={isProjectRelocating}
+              onClick={closeProjectRelocateDialog}
+            >
+              Cancel
+            </Button>
+            <Button disabled={isProjectRelocating} onClick={() => void submitProjectRelocate()}>
+              {isProjectRelocating
+                ? "Saving..."
+                : projectRelocateDestination
+                  ? "Review merge"
+                  : "Move project"}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
 
       <Dialog
         open={projectRenameTarget !== null}
@@ -2759,20 +3034,28 @@ const SidebarChromeHeader = memo(function SidebarChromeHeader({
 
 function SidebarBrand() {
   const stageLabel = useSidebarStageLabel();
+  const hasLongBrandName = APP_BASE_NAME !== "T3 Code";
 
   return (
     <Link
       aria-label="Go to threads"
-      className="sidebar-brand ml-[var(--workspace-titlebar-content-left)] h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md text-foreground outline-hidden ring-ring focus-visible:ring-2"
+      className={`sidebar-brand${hasLongBrandName ? " sidebar-brand-long" : ""}${stageLabel ? " sidebar-brand-with-stage" : ""} ml-[var(--workspace-titlebar-content-left)] h-7 w-fit min-w-0 shrink-0 items-center gap-1 overflow-hidden rounded-md text-foreground outline-hidden ring-ring focus-visible:ring-2`}
       to="/"
     >
       <T3Wordmark />
       <span className="truncate text-sm font-medium tracking-tight text-muted-foreground">
         Code
       </span>
-      <span className="sidebar-brand-stage shrink-0 items-center whitespace-nowrap rounded-full bg-muted/50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
-        {stageLabel}
-      </span>
+      {hasLongBrandName ? (
+        <span className="truncate text-sm font-medium tracking-tight text-muted-foreground">
+          - goncalloramos
+        </span>
+      ) : null}
+      {stageLabel ? (
+        <span className="sidebar-brand-stage shrink-0 items-center whitespace-nowrap rounded-full bg-muted/50 px-1.5 py-0.5 text-[8px] font-medium uppercase tracking-[0.18em] text-muted-foreground/60">
+          {stageLabel}
+        </span>
+      ) : null}
     </Link>
   );
 }

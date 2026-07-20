@@ -24,6 +24,7 @@ import {
   renderMacPasskeyEntitlements,
   resolveClerkPasskeyNativeArtifacts,
   resolveMacPasskeySigningConfiguration,
+  resolveMacPackagedExecutablePaths,
   resolveDesktopRuntimeDependencies,
   resolveFffNativeDependencies,
   resolveBuildOptions,
@@ -85,24 +86,36 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
   });
 
   it("switches desktop packaging product names to nightly for nightly builds", () => {
-    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code Custom");
+    assert.equal(resolveDesktopProductName("0.0.17"), "T3 Code - goncalloramos");
     assert.equal(
       resolveDesktopProductName("0.0.17-nightly.20260413.42"),
-      "T3 Code Custom (Nightly)",
+      "T3 Code - goncalloramos (Nightly)",
+    );
+  });
+
+  it("keeps the display-name app bundle while deriving the slugged macOS executable", () => {
+    assert.deepStrictEqual(
+      resolveMacPackagedExecutablePaths("/tmp/mac-arm64", "T3 Code - goncalloramos"),
+      {
+        sourcePath:
+          "/tmp/mac-arm64/T3 Code - goncalloramos.app/Contents/MacOS/T3 Code - goncalloramos",
+        targetPath:
+          "/tmp/mac-arm64/T3 Code - goncalloramos.app/Contents/MacOS/t3code-goncalloramos",
+      },
     );
   });
 
   it("switches desktop packaging icons to the nightly artwork for nightly versions", () => {
     assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17"), {
-      macIconPng: BRAND_ASSET_PATHS.customMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.productionLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.productionWindowsIconIco,
+      macIconPng: BRAND_ASSET_PATHS.goncalloramosMacIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.goncalloramosMacIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.goncalloramosWindowsIconIco,
     });
 
     assert.deepStrictEqual(resolveDesktopBuildIconAssets("0.0.17-nightly.20260413.42"), {
-      macIconPng: BRAND_ASSET_PATHS.customMacIconPng,
-      linuxIconPng: BRAND_ASSET_PATHS.nightlyLinuxIconPng,
-      windowsIconIco: BRAND_ASSET_PATHS.nightlyWindowsIconIco,
+      macIconPng: BRAND_ASSET_PATHS.goncalloramosMacIconPng,
+      linuxIconPng: BRAND_ASSET_PATHS.goncalloramosMacIconPng,
+      windowsIconIco: BRAND_ASSET_PATHS.goncalloramosWindowsIconIco,
     });
   });
 
@@ -358,7 +371,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     });
 
     assert.deepStrictEqual(configuration, {
-      appId: "com.goncalloramos.t3code-custom",
+      appId: "com.goncalloramos.t3code",
       teamId: "ABC1234567",
       rpDomains: ["example.clerk.accounts.dev"],
       provisioningProfilePath: "/tmp/t3code.provisionprofile",
@@ -378,7 +391,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       "clerk.example.com",
       "example.clerk.accounts.dev",
     ]);
-    assert.include(entitlements, "<string>ABC1234567.com.goncalloramos.t3code-custom</string>");
+    assert.include(entitlements, "<string>ABC1234567.com.goncalloramos.t3code</string>");
     assert.include(entitlements, "<string>webcredentials:clerk.example.com</string>");
     assert.include(entitlements, "<string>webcredentials:example.clerk.accounts.dev</string>");
     assert.include(entitlements, "<key>com.apple.security.cs.allow-jit</key>");
@@ -473,11 +486,14 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
       });
 
       const mac = config.mac as Record<string, unknown>;
-      assert.equal(config.appId, "com.goncalloramos.t3code-custom");
+      assert.equal(config.appId, "com.goncalloramos.t3code");
+      assert.deepStrictEqual(mac.extendInfo, {
+        CFBundleExecutable: "t3code-goncalloramos",
+      });
       assert.equal(mac.entitlements, "/tmp/entitlements.mac.plist");
       assert.equal(mac.provisioningProfile, "/tmp/t3code.provisionprofile");
       assert.deepStrictEqual(mac.protocols, [
-        { name: "T3 Code", schemes: ["t3code", "t3code-dev"] },
+        { name: "T3 Code - goncalloramos", schemes: ["t3code-goncalloramos"] },
       ]);
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),
   );
@@ -514,6 +530,7 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
 
       const win = config.win as Record<string, unknown>;
       assert.equal(win.icon, "icon.ico");
+      assert.equal(win.executableName, "t3code-goncalloramos");
       assert.equal(win.signAndEditExecutable, true);
       assert.notProperty(win, "azureSignOptions");
     }).pipe(Effect.provide(ConfigProvider.layer(ConfigProvider.fromEnv({ env: {} })))),

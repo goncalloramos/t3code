@@ -11,9 +11,11 @@ import {
 import {
   type CreateProjectInput,
   type DeleteProjectInput,
+  type RelocateProjectInput,
   type UpdateProjectInput,
   createProject,
   deleteProject,
+  relocateProject,
   updateProject,
 } from "../operations/commands.ts";
 import type { EnvironmentRegistry } from "../connection/registry.ts";
@@ -21,6 +23,7 @@ import type { EnvironmentRegistry } from "../connection/registry.ts";
 export type {
   CreateProjectInput,
   DeleteProjectInput,
+  RelocateProjectInput,
   UpdateProjectInput,
 } from "../operations/commands.ts";
 
@@ -83,6 +86,12 @@ export function createProjectEnvironmentAtoms<R, E>(
     update: createEnvironmentCommand(runtime, {
       label: "environment-data:commands:project:update",
       execute: (input: UpdateProjectInput) => updateProject(input),
+      scheduler: projectScheduler,
+      concurrency: projectConcurrency,
+    }),
+    relocate: createEnvironmentCommand(runtime, {
+      label: "environment-data:commands:project:relocate",
+      execute: (input: RelocateProjectInput) => relocateProject(input),
       scheduler: projectScheduler,
       concurrency: projectConcurrency,
     }),

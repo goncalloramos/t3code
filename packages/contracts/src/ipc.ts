@@ -97,7 +97,7 @@ import type {
   OrchestrationSubscribeThreadInput,
   OrchestrationThreadStreamItem,
 } from "./orchestration.ts";
-import { EnvironmentId } from "./baseSchemas.ts";
+import { EnvironmentId, ThreadId } from "./baseSchemas.ts";
 import { AuthAccessTokenResult, AuthSessionState, AuthWebSocketTicketResult } from "./auth.ts";
 import { AdvertisedEndpoint } from "./remoteAccess.ts";
 import { EditorId } from "./editor.ts";
@@ -162,7 +162,7 @@ export type DesktopUpdateStatus =
 export type DesktopRuntimeArch = "arm64" | "x64" | "other";
 export type DesktopTheme = "light" | "dark" | "system";
 export type DesktopUpdateChannel = "latest" | "nightly";
-export type DesktopAppStageLabel = "Alpha" | "Custom" | "Dev" | "Nightly";
+export type DesktopAppStageLabel = "Stable" | "Alpha" | "Dev" | "Nightly";
 
 export const DesktopUpdateStatusSchema = Schema.Literals([
   "disabled",
@@ -177,7 +177,7 @@ export const DesktopUpdateStatusSchema = Schema.Literals([
 export const DesktopRuntimeArchSchema = Schema.Literals(["arm64", "x64", "other"]);
 export const DesktopThemeSchema = Schema.Literals(["light", "dark", "system"]);
 export const DesktopUpdateChannelSchema = Schema.Literals(["latest", "nightly"]);
-export const DesktopAppStageLabelSchema = Schema.Literals(["Alpha", "Custom", "Dev", "Nightly"]);
+export const DesktopAppStageLabelSchema = Schema.Literals(["Stable", "Alpha", "Dev", "Nightly"]);
 
 export interface DesktopAppBranding {
   baseName: string;
@@ -190,6 +190,18 @@ export const DesktopAppBrandingSchema = Schema.Struct({
   stageLabel: DesktopAppStageLabelSchema,
   displayName: Schema.String,
 });
+
+export const DesktopAgentNotificationKindSchema = Schema.Literals(["input", "completion"]);
+export type DesktopAgentNotificationKind = typeof DesktopAgentNotificationKindSchema.Type;
+
+export const DesktopAgentNotificationSchema = Schema.Struct({
+  kind: DesktopAgentNotificationKindSchema,
+  environmentId: EnvironmentId,
+  threadId: ThreadId,
+  title: Schema.String,
+  body: Schema.String,
+});
+export type DesktopAgentNotification = typeof DesktopAgentNotificationSchema.Type;
 
 export interface DesktopRuntimeInfo {
   hostArch: DesktopRuntimeArch;
@@ -435,6 +447,57 @@ export const DesktopServerExposureStateSchema = Schema.Struct({
   advertisedHost: Schema.NullOr(Schema.String),
   tailscaleServeEnabled: Schema.Boolean,
   tailscaleServePort: Schema.Number,
+});
+
+export interface DesktopRemoteModePreferences {
+  enabled: boolean;
+  preventSystemSleep: boolean;
+  launchAtLogin: boolean;
+}
+
+export const DesktopRemoteModePreferencesSchema = Schema.Struct({
+  enabled: Schema.Boolean,
+  preventSystemSleep: Schema.Boolean,
+  launchAtLogin: Schema.Boolean,
+});
+
+export type DesktopRemoteModeStatus =
+  | "off"
+  | "enabling"
+  | "ready"
+  | "tailscale-unavailable"
+  | "endpoint-unverified"
+  | "restart-required"
+  | "error";
+
+export const DesktopRemoteModeStatusSchema = Schema.Literals([
+  "off",
+  "enabling",
+  "ready",
+  "tailscale-unavailable",
+  "endpoint-unverified",
+  "restart-required",
+  "error",
+]);
+
+export interface DesktopRemoteModeState {
+  preferences: DesktopRemoteModePreferences;
+  status: DesktopRemoteModeStatus;
+  endpointUrl: string | null;
+  environmentId: EnvironmentId | null;
+  sleepAssertionActive: boolean;
+  loginItemActive: boolean;
+  detail: string | null;
+}
+
+export const DesktopRemoteModeStateSchema = Schema.Struct({
+  preferences: DesktopRemoteModePreferencesSchema,
+  status: DesktopRemoteModeStatusSchema,
+  endpointUrl: Schema.NullOr(Schema.String),
+  environmentId: Schema.NullOr(EnvironmentId),
+  sleepAssertionActive: Schema.Boolean,
+  loginItemActive: Schema.Boolean,
+  detail: Schema.NullOr(Schema.String),
 });
 
 export interface PickFolderOptions {
@@ -993,6 +1056,11 @@ export interface DesktopBridge {
     readonly port?: number;
   }) => Promise<DesktopServerExposureState>;
   getAdvertisedEndpoints: () => Promise<readonly AdvertisedEndpoint[]>;
+  getRemoteModeState: () => Promise<DesktopRemoteModeState>;
+  setRemoteModePreferences: (
+    preferences: DesktopRemoteModePreferences,
+  ) => Promise<DesktopRemoteModeState>;
+  retryRemoteMode: () => Promise<DesktopRemoteModeState>;
   getWslState: () => Promise<DesktopWslState>;
   setWslBackendEnabled: (enabled: boolean) => Promise<DesktopWslState>;
   setWslDistro: (distro: string | null) => Promise<DesktopWslState>;
@@ -1005,6 +1073,10 @@ export interface DesktopBridge {
     position?: { x: number; y: number },
   ) => Promise<T | null>;
   openExternal: (url: string) => Promise<boolean>;
+  showAgentNotification: (notification: DesktopAgentNotification) => Promise<boolean>;
+  onAgentNotificationClick: (
+    listener: (target: Pick<DesktopAgentNotification, "environmentId" | "threadId">) => void,
+  ) => () => void;
   onMenuAction: (listener: (action: string) => void) => () => void;
   getWindowFullscreenState: () => boolean;
   onWindowFullscreenStateChange: (listener: (fullscreen: boolean) => void) => () => void;

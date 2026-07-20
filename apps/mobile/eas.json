@@ -49,6 +49,15 @@
       "channel": "production",
       "environment": "production",
       "autoIncrement": true
+    },
+    "goncalloramos": {
+      "corepack": true,
+      "env": {
+        "APP_VARIANT": "goncalloramos",
+        "NODE_OPTIONS": "--max-old-space-size=4096"
+      },
+      "distribution": "internal",
+      "autoIncrement": true
     }
   },
   "submit": {

@@ -1,7 +1,7 @@
 import type { ScopedThreadRef } from "@t3tools/contracts";
 import { memo, useMemo, useState } from "react";
 
-import { useAssetUrl } from "~/assets/assetUrls";
+import { useAssetUrlState } from "~/assets/assetUrls";
 import { resolveChatImageSource } from "~/chatImageSources";
 import { cn } from "~/lib/utils";
 
@@ -69,15 +69,22 @@ function WorkspaceChatImage(
     }),
     [props.path, props.threadRef.threadId],
   );
-  const source = useAssetUrl(props.threadRef.environmentId, resource);
-  if (!source) {
+  const source = useAssetUrlState(props.threadRef.environmentId, resource);
+  if (source.status === "failed") {
+    return (
+      <span className="flex min-h-20 items-center justify-center rounded-lg border border-border/80 bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
+        Unable to display {props.alt}
+      </span>
+    );
+  }
+  if (source.status === "loading") {
     return (
       <span className="flex min-h-20 items-center justify-center rounded-lg border border-border/80 bg-muted/20 px-3 py-4 text-center text-xs text-muted-foreground">
         Loading {props.alt}…
       </span>
     );
   }
-  return <ResolvedImage {...props} source={source} />;
+  return <ResolvedImage {...props} source={source.url} />;
 }
 
 export const ChatImage = memo(function ChatImage(props: ChatImageProps) {

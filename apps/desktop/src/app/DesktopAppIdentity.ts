@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off - Electron identity migration must block the ready event so protocol registration and helper processes cannot race the atomic copy.
 import * as Context from "effect/Context";
 import * as Effect from "effect/Effect";
 import * as FileSystem from "effect/FileSystem";
@@ -5,10 +6,16 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
+import * as NodeFS from "node:fs";
+import * as NodePath from "node:path";
 
 import * as ElectronApp from "../electron/ElectronApp.ts";
 import * as DesktopAssets from "./DesktopAssets.ts";
 import * as DesktopEnvironment from "./DesktopEnvironment.ts";
+import {
+  GONCALLORAMOS_PRODUCT_IDENTITY,
+  LEGACY_GONCALLORAMOS_PRODUCT_IDENTITY,
+} from "../../../../scripts/lib/product-identity.ts";
 
 const COMMIT_HASH_PATTERN = /^[0-9a-f]{7,40}$/i;
 const COMMIT_HASH_DISPLAY_LENGTH = 12;
@@ -17,6 +24,22 @@ const AppPackageMetadata = Schema.Struct({
   t3codeCommitHash: Schema.optional(Schema.String),
 });
 const decodeAppPackageMetadata = Schema.decodeEffect(Schema.fromJsonString(AppPackageMetadata));
+const DesktopMigrationMarker = Schema.Struct({ version: Schema.Number, sourcePath: Schema.String });
+const encodeDesktopMigrationMarker = Schema.encodeEffect(
+  Schema.fromJsonString(DesktopMigrationMarker),
+);
+
+export const isTransientRuntimeMigrationPath = (relativePath: string): boolean => {
+  const normalized = relativePath.replaceAll("\\", "/");
+  const basename = normalized.slice(normalized.lastIndexOf("/") + 1);
+  return (
+    normalized === "ssh-launch" ||
+    normalized.startsWith("ssh-launch/") ||
+    basename === "server-runtime.json" ||
+    /(?:^|[._-])(?:pid|sock|socket|lock)$/iu.test(basename) ||
+    (/ssh/iu.test(basename) && /forward/iu.test(basename))
+  );
+};
 
 export class DesktopUserDataPathResolutionError extends Schema.TaggedErrorClass<DesktopUserDataPathResolutionError>()(
   "DesktopUserDataPathResolutionError",
@@ -30,10 +53,233 @@ export class DesktopUserDataPathResolutionError extends Schema.TaggedErrorClass<
   }
 }
 
+export class DesktopIdentityMigrationError extends Schema.TaggedErrorClass<DesktopIdentityMigrationError>()(
+  "DesktopIdentityMigrationError",
+  {
+    sourcePath: Schema.String,
+    targetPath: Schema.String,
+    cause: Schema.Defect(),
+  },
+) {
+  override get message(): string {
+    return `Failed to migrate T3 Code data from "${this.sourcePath}" to "${this.targetPath}". The source was left unchanged.`;
+  }
+}
+
+const copyDirectoryAtomicallyBeforeReady = (input: {
+  readonly sourcePath: string;
+  readonly targetPath: string;
+  readonly removeTransientRuntimeState: boolean;
+}): void => {
+  if (NodeFS.existsSync(input.targetPath) || !NodeFS.existsSync(input.sourcePath)) {
+    return;
+  }
+
+  const temporaryPath = `${input.targetPath}.migrating-${process.pid}`;
+  try {
+    NodeFS.rmSync(temporaryPath, { recursive: true, force: true });
+    NodeFS.cpSync(input.sourcePath, temporaryPath, {
+      recursive: true,
+      preserveTimestamps: true,
+      errorOnExist: true,
+      filter: input.removeTransientRuntimeState
+        ? (sourcePath) => {
+            const relativePath = NodePath.relative(input.sourcePath, sourcePath);
+            return relativePath.length === 0 || !isTransientRuntimeMigrationPath(relativePath);
+          }
+        : undefined,
+    });
+    NodeFS.writeFileSync(
+      NodePath.join(temporaryPath, ".goncalloramos-migration.json"),
+      `${JSON.stringify({ version: 1, sourcePath: input.sourcePath })}\n`,
+    );
+    NodeFS.renameSync(temporaryPath, input.targetPath);
+  } catch (cause) {
+    NodeFS.rmSync(temporaryPath, { recursive: true, force: true });
+    throw new DesktopIdentityMigrationError({
+      sourcePath: input.sourcePath,
+      targetPath: input.targetPath,
+      cause,
+    });
+  }
+};
+
+export const migrateDesktopIdentityBeforeReady = (input: {
+  readonly homeDirectory: string;
+  readonly platform: NodeJS.Platform;
+  readonly isDevelopment: boolean;
+  readonly t3HomeOverride: string | undefined;
+  readonly appDataDirectoryOverride: string | undefined;
+  readonly xdgConfigHomeOverride: string | undefined;
+}): string => {
+  const appDataDirectory =
+    input.platform === "win32"
+      ? (input.appDataDirectoryOverride ?? NodePath.join(input.homeDirectory, "AppData", "Roaming"))
+      : input.platform === "darwin"
+        ? NodePath.join(input.homeDirectory, "Library", "Application Support")
+        : (input.xdgConfigHomeOverride ?? NodePath.join(input.homeDirectory, ".config"));
+  const userDataDirName = input.isDevelopment
+    ? `${GONCALLORAMOS_PRODUCT_IDENTITY.applicationSupportDirectoryName} (Dev)`
+    : GONCALLORAMOS_PRODUCT_IDENTITY.applicationSupportDirectoryName;
+  const userDataPath = NodePath.join(appDataDirectory, userDataDirName);
+  const legacyUserDataPaths = input.isDevelopment
+    ? [NodePath.join(appDataDirectory, "T3 Code Custom (Dev)")]
+    : LEGACY_GONCALLORAMOS_PRODUCT_IDENTITY.applicationSupportDirectoryNames.map((name) =>
+        NodePath.join(appDataDirectory, name),
+      );
+
+  if (!NodeFS.existsSync(userDataPath)) {
+    const legacyUserDataPath = legacyUserDataPaths.find(NodeFS.existsSync);
+    if (legacyUserDataPath !== undefined) {
+      copyDirectoryAtomicallyBeforeReady({
+        sourcePath: legacyUserDataPath,
+        targetPath: userDataPath,
+        removeTransientRuntimeState: false,
+      });
+    }
+  }
+
+  if (input.t3HomeOverride === undefined) {
+    copyDirectoryAtomicallyBeforeReady({
+      sourcePath: NodePath.join(input.homeDirectory, ".t3"),
+      targetPath: NodePath.join(
+        input.homeDirectory,
+        GONCALLORAMOS_PRODUCT_IDENTITY.runtimeHomeDirectoryName,
+      ),
+      removeTransientRuntimeState: true,
+    });
+  }
+
+  return userDataPath;
+};
+
+const copyDirectoryAtomically = Effect.fn("desktop.appIdentity.copyDirectoryAtomically")(function* (
+  environment: DesktopEnvironment.DesktopEnvironment["Service"],
+  input: {
+    readonly sourcePath: string;
+    readonly targetPath: string;
+    readonly removeTransientRuntimeState: boolean;
+  },
+) {
+  const fileSystem = yield* FileSystem.FileSystem;
+  return yield* Effect.gen(function* () {
+    if (yield* fileSystem.exists(input.targetPath)) return;
+    if (!(yield* fileSystem.exists(input.sourcePath))) return;
+
+    const temporaryPath = `${input.targetPath}.migrating-${process.pid}`;
+    yield* fileSystem.remove(temporaryPath, { recursive: true, force: true });
+    yield* fileSystem.copy(input.sourcePath, temporaryPath, {
+      overwrite: false,
+      preserveTimestamps: true,
+    });
+
+    if (input.removeTransientRuntimeState) {
+      const transientPaths = (yield* fileSystem.readDirectory(temporaryPath, {
+        recursive: true,
+      }))
+        .filter(isTransientRuntimeMigrationPath)
+        .sort((left, right) => right.length - left.length)
+        .map((relativePath) => environment.path.join(temporaryPath, relativePath));
+      yield* Effect.forEach(
+        transientPaths,
+        (path) => fileSystem.remove(path, { recursive: true, force: true }),
+        { discard: true },
+      );
+    }
+
+    const marker = yield* encodeDesktopMigrationMarker({
+      version: 1,
+      sourcePath: input.sourcePath,
+    });
+    yield* fileSystem.writeFileString(
+      environment.path.join(temporaryPath, ".goncalloramos-migration.json"),
+      `${marker}\n`,
+    );
+    yield* fileSystem.rename(temporaryPath, input.targetPath);
+  }).pipe(
+    Effect.mapError(
+      (cause) =>
+        new DesktopIdentityMigrationError({
+          sourcePath: input.sourcePath,
+          targetPath: input.targetPath,
+          cause,
+        }),
+    ),
+  );
+});
+
+export const migrateDefaultRuntimeHome = (
+  environment: DesktopEnvironment.DesktopEnvironment["Service"],
+): Effect.Effect<void, DesktopIdentityMigrationError, FileSystem.FileSystem> =>
+  environment.shouldMigrateRuntimeHome
+    ? copyDirectoryAtomically(environment, {
+        sourcePath: environment.legacyBaseDir,
+        targetPath: environment.baseDir,
+        removeTransientRuntimeState: true,
+      })
+    : Effect.void;
+
+export const resolveMigratedUserDataPath = (
+  environment: DesktopEnvironment.DesktopEnvironment["Service"],
+): Effect.Effect<
+  string,
+  DesktopUserDataPathResolutionError | DesktopIdentityMigrationError,
+  FileSystem.FileSystem
+> =>
+  Effect.gen(function* () {
+    const fileSystem = yield* FileSystem.FileSystem;
+    const targetPath = environment.path.join(
+      environment.appDataDirectory,
+      environment.userDataDirName,
+    );
+    if (
+      yield* fileSystem
+        .exists(targetPath)
+        .pipe(
+          Effect.mapError(
+            (cause) => new DesktopUserDataPathResolutionError({ legacyPath: targetPath, cause }),
+          ),
+        )
+    ) {
+      return targetPath;
+    }
+
+    const legacyPaths = environment.isDevelopment
+      ? [environment.path.join(environment.appDataDirectory, environment.legacyUserDataDirName)]
+      : LEGACY_GONCALLORAMOS_PRODUCT_IDENTITY.applicationSupportDirectoryNames.map((name) =>
+          environment.path.join(environment.appDataDirectory, name),
+        );
+    let legacyPath: string | null = null;
+    for (const candidate of legacyPaths) {
+      const exists = yield* fileSystem
+        .exists(candidate)
+        .pipe(
+          Effect.mapError(
+            (cause) => new DesktopUserDataPathResolutionError({ legacyPath: candidate, cause }),
+          ),
+        );
+      if (exists) {
+        legacyPath = candidate;
+        break;
+      }
+    }
+    if (legacyPath === null) return targetPath;
+    yield* copyDirectoryAtomically(environment, {
+      sourcePath: legacyPath,
+      targetPath,
+      removeTransientRuntimeState: false,
+    });
+    return targetPath;
+  }).pipe(Effect.withSpan("desktop.appIdentity.resolveUserDataPath"));
+
 export class DesktopAppIdentity extends Context.Service<
   DesktopAppIdentity,
   {
-    readonly resolveUserDataPath: Effect.Effect<string, DesktopUserDataPathResolutionError>;
+    readonly resolveUserDataPath: Effect.Effect<
+      string,
+      DesktopUserDataPathResolutionError | DesktopIdentityMigrationError
+    >;
+    readonly migrateRuntimeHome: Effect.Effect<void, DesktopIdentityMigrationError>;
     readonly configure: Effect.Effect<void>;
   }
 >()("@t3tools/desktop/app/DesktopAppIdentity") {}
@@ -90,24 +336,14 @@ export const make = Effect.gen(function* () {
     return commitHash;
   });
 
-  const resolveUserDataPath = Effect.gen(function* () {
-    const legacyPath = environment.path.join(
-      environment.appDataDirectory,
-      environment.legacyUserDataDirName,
-    );
-    const legacyPathExists = yield* fileSystem.exists(legacyPath).pipe(
-      Effect.mapError(
-        (cause) =>
-          new DesktopUserDataPathResolutionError({
-            legacyPath,
-            cause,
-          }),
-      ),
-    );
-    return legacyPathExists
-      ? legacyPath
-      : environment.path.join(environment.appDataDirectory, environment.userDataDirName);
-  }).pipe(Effect.withSpan("desktop.appIdentity.resolveUserDataPath"));
+  const resolveUserDataPath = resolveMigratedUserDataPath(environment).pipe(
+    Effect.provideService(FileSystem.FileSystem, fileSystem),
+  );
+
+  const migrateRuntimeHome = migrateDefaultRuntimeHome(environment).pipe(
+    Effect.provideService(FileSystem.FileSystem, fileSystem),
+    Effect.withSpan("desktop.appIdentity.migrateRuntimeHome"),
+  );
 
   const configure = Effect.gen(function* () {
     const commitHash = yield* resolveAboutCommitHash;
@@ -137,6 +373,7 @@ export const make = Effect.gen(function* () {
 
   return DesktopAppIdentity.of({
     resolveUserDataPath,
+    migrateRuntimeHome,
     configure,
   });
 });

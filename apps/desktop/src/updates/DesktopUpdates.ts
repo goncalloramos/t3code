@@ -227,7 +227,7 @@ function getAutoUpdateDisabledReason(args: {
   customBuild: boolean;
 }): string | null {
   if (args.customBuild) {
-    return "Automatic updates are disabled for the T3 Code Custom build.";
+    return "Automatic updates are disabled for the T3 Code - goncalloramos build.";
   }
   if (!args.hasUpdateFeedConfig) {
     return "Automatic updates are not available because no update feed is configured.";

@@ -42,7 +42,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
     }),
   );
 
-  it.effect("propagates scripts in project.meta.update payload", () =>
+  it.effect("propagates scripts and color in project.meta.update payload", () =>
     Effect.gen(function* () {
       const now = "2026-01-01T00:00:00.000Z";
       const initial = createEmptyReadModel(now);
@@ -83,6 +83,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
           type: "project.meta.update",
           commandId: CommandId.make("cmd-project-update-scripts"),
           projectId: asProjectId("project-scripts"),
+          color: "teal",
           scripts: Array.from(scripts),
         },
         readModel,
@@ -91,6 +92,7 @@ it.layer(NodeServices.layer)("decider project scripts", (it) => {
       const event = Array.isArray(result) ? result[0] : result;
       expect(event.type).toBe("project.meta-updated");
       expect((event.payload as { scripts?: unknown[] }).scripts).toEqual(scripts);
+      expect((event.payload as { color?: string }).color).toBe("teal");
     }),
   );
 

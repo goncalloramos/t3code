@@ -47,7 +47,7 @@ type ProjectMutationTarget = {
 type ProjectCommandExecutionMode = "live" | "offline";
 type ProjectCliDispatchCommand = Extract<
   ClientOrchestrationCommand,
-  { type: "project.create" | "project.meta.update" | "project.delete" }
+  { type: "project.create" | "project.meta.update" | "project.relocate" | "project.delete" }
 >;
 
 const isEnvironmentHttpCommonError = Schema.is(EnvironmentHttpCommonError);
@@ -563,7 +563,67 @@ const projectRenameCommand = Command.make("rename", {
   ),
 );
 
+const projectMoveCommand = Command.make("move", {
+  ...projectLocationFlags,
+  project: Argument.string("project").pipe(
+    Argument.withDescription("Project id or workspace root to move."),
+  ),
+  destination: Argument.string("destination").pipe(
+    Argument.withDescription("Destination project id or workspace root."),
+  ),
+  merge: Flag.boolean("merge").pipe(
+    Flag.withDescription("Merge into an existing destination project without deleting threads."),
+    Flag.withDefault(false),
+  ),
+}).pipe(
+  Command.withDescription("Move a project, or safely merge it into an existing project."),
+  Command.withHandler((flags) =>
+    runProjectMutation(
+      flags,
+      Effect.fn("projectMoveMutation")(function* ({
+        snapshot,
+        dispatch,
+      }: {
+        readonly snapshot: OrchestrationReadModel;
+        readonly dispatch: (
+          command: ProjectCliDispatchCommand,
+        ) => Effect.Effect<void, Error, FileSystem.FileSystem | HttpClient.HttpClient | Path.Path>;
+      }) {
+        const source = yield* findActiveProjectTarget({
+          snapshot,
+          identifier: flags.project,
+        });
+        let destinationProject = snapshot.projects.find(
+          (project) => project.deletedAt === null && project.id === flags.destination.trim(),
+        );
+        const workspaceRoot = destinationProject
+          ? destinationProject.workspaceRoot
+          : yield* normalizeWorkspaceRootForProjectCommand(flags.destination);
+        destinationProject ??= snapshot.projects.find(
+          (project) => project.deletedAt === null && project.workspaceRoot === workspaceRoot,
+        );
+
+        yield* dispatch({
+          type: "project.relocate",
+          commandId: CommandId.make(yield* projectCommandUuid),
+          projectId: source.id,
+          workspaceRoot,
+          mergeOnConflict: flags.merge,
+        });
+        return destinationProject
+          ? `Merged project ${source.id} (${source.title}) into ${destinationProject.id} (${destinationProject.title}).`
+          : `Moved project ${source.id} (${source.title}) to ${workspaceRoot}.`;
+      }),
+    ),
+  ),
+);
+
 export const projectCommand = Command.make("project").pipe(
   Command.withDescription("Manage projects."),
-  Command.withSubcommands([projectAddCommand, projectRemoveCommand, projectRenameCommand]),
+  Command.withSubcommands([
+    projectAddCommand,
+    projectMoveCommand,
+    projectRemoveCommand,
+    projectRenameCommand,
+  ]),
 );

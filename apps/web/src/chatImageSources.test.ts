@@ -27,6 +27,16 @@ describe("chatImageSources", () => {
     ]);
   });
 
+  it("prefers embedded generated image data over a Mac-only saved path", () => {
+    expect(
+      extractWorkLogImages({
+        type: "imageGeneration",
+        savedPath: "/Users/alice/.codex/generated_images/thread/image.png",
+        result: "aW1hZ2U=",
+      }),
+    ).toEqual([{ source: "data:image/png;base64,aW1hZ2U=", alt: "Tool image" }]);
+  });
+
   it("resolves workspace image paths through the scoped thread", () => {
     const threadRef = {
       environmentId: EnvironmentId.make("local"),

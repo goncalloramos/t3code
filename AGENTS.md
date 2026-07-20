@@ -83,17 +83,20 @@ official base `1735e27d9`. Do not assume those hashes remain current; always cal
    - Primary files live in `packages/shared/src/codexRateLimits.ts`,
      `packages/contracts/src/providerRuntime.ts`, `packages/contracts/src/server.ts`, the Codex provider
      files under `apps/server/src/provider/`, and `apps/web/src/components/chat/CodexQuotaIndicator.tsx`.
-2. Custom desktop identity and isolation
-   - Product name: `T3 Code Custom`.
-   - App ID: `com.goncalloramos.t3code-custom`.
+2. Goncalloramos desktop identity and isolation
+   - Product name: `T3 Code - goncalloramos`.
+   - App ID: `com.goncalloramos.t3code` (`com.goncalloramos.t3code.dev` in development).
+   - Runtime home: `~/.t3-goncalloramos`; first launch copies durable state from `~/.t3` and
+     retains the source as a rollback backup.
    - Separate executable, application-data, Linux desktop, and WM-class names.
    - The official updater must stay disabled unless it is deliberately replaced with releases from
      this fork.
    - Unsigned local macOS builds must receive a valid ad-hoc signature after Electron is renamed.
-3. Custom visual identity
-   - macOS icon uses `assets/custom/t3-custom-macos-1024.png` and includes the `CUSTOM` badge.
-   - Stable desktop builds inject stage label `Custom`, so the sidebar reads `T3 Code CUSTOM` while
-     the macOS application/menu name remains `T3 Code Custom`.
+3. Goncalloramos visual identity
+   - Desktop and mobile use `assets/goncalloramos/t3-goncalloramos-macos-1024.png` with a compact
+     `G` badge.
+   - Stable desktop builds use stage label `Stable`, which renders no badge. The sidebar and
+     macOS application/menu name read `T3 Code - goncalloramos`.
    - Development and nightly labels remain `Dev` and `Nightly`.
 4. Compatibility
    - Claude, Cursor, and OpenCode behavior must remain unchanged.
@@ -108,8 +111,15 @@ official base `1735e27d9`. Do not assume those hashes remain current; always cal
    - Marked update plans render an explicit `Update` action. The existing plan implementation flow
      creates a separate implementation thread; that thread must preserve the manual review, test,
      DMG build, and no-unapproved-main-push safeguards below.
-   - Primary files are `apps/web/src/customUpstreamUpdate.ts` and
-     `apps/web/src/components/CustomUpstreamUpdateNotification.tsx`.
+   - Primary files are `apps/web/src/goncalloramosUpstreamUpdate.ts` and
+     `apps/web/src/components/GoncalloramosUpstreamUpdateNotification.tsx`.
+6. Private mobile and Remote Mode
+   - Mobile variant `goncalloramos` uses bundle ID `com.goncalloramos.t3code.mobile`, scheme
+     `t3code-goncalloramos`, private signing from `T3CODE_APPLE_TEAM_ID`, and no Expo OTA updates.
+   - Desktop Remote Mode keeps the backend on loopback and uses Tailscale Serve HTTPS on port 443.
+     It must never enable Funnel or require LAN-wide `0.0.0.0` binding.
+   - Remote Mode owns scoped sleep/login resources and reuses the provider-neutral pairing,
+     authorization, WebSocket, approvals, terminal, file, diff, and outbox protocols.
 
 The original logical custom commits are useful during audits:
 
@@ -161,7 +171,7 @@ Search the updated upstream tree for the feature concepts, not only our filename
 ```sh
 git grep -n -E 'account/rateLimits/(read|updated)|rateLimitsByLimitId|windowDurationMins|usedPercent' upstream/main -- apps packages
 git grep -n -E 'CodexQuota|quota|rate.?limit' upstream/main -- apps/web apps/server packages
-git grep -n -E 'appId|productName|autoUpdater|stageLabel|T3 Code Custom' upstream/main -- apps/desktop scripts packages/contracts
+git grep -n -E 'appId|productName|autoUpdater|stageLabel|T3 Code - goncalloramos' upstream/main -- apps/desktop scripts packages/contracts
 ```
 
 Then inspect upstream changes in every overlapping or semantically related file:
@@ -237,7 +247,7 @@ Manually verify at least these behaviors:
 - Open the quota popover and inspect reset times, progress bars, error/loading/expired states, and
   multiple buckets.
 - Start sessions for Claude, Cursor, and OpenCode to confirm provider-aware behavior.
-- Confirm stable desktop branding says `CUSTOM`, uses the custom icon and app ID, stores data separately,
+- Confirm stable desktop branding says `T3 Code - goncalloramos`, uses the `G` icon and app ID, stores data separately,
   and cannot be replaced by the official updater.
 - With a newer mocked GitHub release, confirm the custom update toast has `Dismiss until restart` and
   `Analyse`, dismissal resets on relaunch, analysis opens the custom repository in Plan mode, and a
@@ -247,10 +257,10 @@ Build and validate the installable artifact. On Apple Silicon macOS:
 
 ```sh
 pnpm run dist:desktop:dmg:arm64
-hdiutil verify release/T3-Code-Custom-*-arm64.dmg
+hdiutil verify release/T3-Code-goncalloramos-*-arm64.dmg
 ```
 
-Mount the DMG and run `codesign --verify --deep --strict` against `T3 Code Custom.app`. Launch the
+Mount the DMG and run `codesign --verify --deep --strict` against `T3 Code - goncalloramos.app`. Launch the
 packaged app and capture a screenshot of the quota indicator/popover and custom branding. If launched
 directly from a T3 integrated terminal, remove `ELECTRON_RUN_AS_NODE` for that command; Finder launches
 are unaffected.

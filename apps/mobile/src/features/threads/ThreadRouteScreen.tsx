@@ -22,6 +22,7 @@ import {
   type AndroidHeaderAction,
 } from "../../components/AndroidScreenHeader";
 import { LoadingScreen } from "../../components/LoadingScreen";
+import { mobileCodexQuotaLabel } from "../../lib/codexQuotaPresentation";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { connectionTone } from "../connection/connectionTone";
 
@@ -279,12 +280,19 @@ function ThreadRouteContent(
 
   /* ─── Native header theming ──────────────────────────────────────── */
   const usesNativeHeaderGlass = Platform.OS === "ios";
-  const headerSubtitle = [
+  const contextHeaderSubtitle = [
     selectedThreadProject?.title ?? null,
     selectedEnvironmentConnection?.environmentLabel ?? null,
   ]
     .filter(Boolean)
     .join(" · ");
+  const serverConfig = routeEnvironmentRuntime?.serverConfig ?? null;
+  const selectedProvider =
+    serverConfig?.providers.find(
+      (provider) =>
+        provider.instanceId === selectedThreadWithDraftSettings?.modelSelection.instanceId,
+    ) ?? null;
+  const headerSubtitle = mobileCodexQuotaLabel(selectedProvider) ?? contextHeaderSubtitle;
   /* ─── Git status for native header trigger ───────────────────────── */
   const gitStatus = useEnvironmentQuery(
     selectedThread !== null && selectedThreadCwd !== null
@@ -739,7 +747,6 @@ function ThreadRouteContent(
     detailDeleted: selectedThreadDetailState.status === "deleted",
     connectionState: routeConnectionState,
   });
-  const serverConfig = routeEnvironmentRuntime?.serverConfig ?? null;
   const renderThreadRouteBody = (showActionControls: boolean) => (
     <>
       <ThreadGitControls {...threadGitControlProps} showActionControls={showActionControls} />

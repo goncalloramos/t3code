@@ -1,5 +1,6 @@
 import {
   ContextMenuItemSchema,
+  DesktopAgentNotificationSchema,
   DesktopAppBrandingSchema,
   DesktopEnvironmentBootstrapSchema,
   DesktopThemeSchema,
@@ -10,6 +11,7 @@ import {
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
+import * as Electron from "electron";
 
 import * as DesktopBackendPool from "../../backend/DesktopBackendPool.ts";
 import * as DesktopLocalEnvironmentAuth from "../../backend/DesktopLocalEnvironmentAuth.ts";
@@ -266,5 +268,44 @@ export const openExternal = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.window.openExternal")(function* (url) {
     const shell = yield* ElectronShell.ElectronShell;
     return yield* shell.openExternal(url);
+  }),
+});
+
+export const showAgentNotification = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.SHOW_AGENT_NOTIFICATION_CHANNEL,
+  payload: DesktopAgentNotificationSchema,
+  result: Schema.Boolean,
+  handler: Effect.fn("desktop.ipc.window.showAgentNotification")(function* (input) {
+    return yield* Effect.sync(() => {
+      if (!Electron.Notification.isSupported()) {
+        return false;
+      }
+
+      const notification = new Electron.Notification({
+        title: input.title,
+        body: input.body,
+      });
+      notification.on("click", () => {
+        try {
+          const window = Electron.BrowserWindow.getAllWindows().find(
+            (candidate) => !candidate.isDestroyed(),
+          );
+          if (!window) return;
+          if (window.isMinimized()) window.restore();
+          if (!window.isVisible()) window.show();
+          Electron.app.focus({ steal: true });
+          window.focus();
+          window.webContents.send(IpcChannels.AGENT_NOTIFICATION_CLICK_CHANNEL, {
+            environmentId: input.environmentId,
+            threadId: input.threadId,
+          });
+        } catch {
+          // The alert has already served its purpose. A window may disappear
+          // between delivery and click while the app is quitting.
+        }
+      });
+      notification.show();
+      return true;
+    });
   }),
 });

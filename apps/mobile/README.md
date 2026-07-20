@@ -8,11 +8,13 @@
 > [!NOTE]
 > Uses native modules so using Expo Go is not supported. You need to use the Expo Dev Client.
 
-This app has three variants:
+This app has four variants:
 
 - `development`: Expo dev client, installable side-by-side as `T3 Code Dev`
 - `preview`: persistent internal preview build, installable side-by-side as `T3 Code Preview`
 - `production`: store/release build as `T3 Code`
+- `goncalloramos`: private iPhone build as `T3 Code - goncalloramos`, isolated under
+  `com.goncalloramos.t3code.mobile` with Expo OTA updates disabled
 
 Run commands from `apps/mobile`.
 
@@ -77,7 +79,19 @@ Inspect the resolved Expo config for a variant:
 ```bash
 vp run config:dev
 vp run config:preview
+T3CODE_APPLE_TEAM_ID=YOURTEAMID vp run config:goncalloramos
 ```
+
+Build the private goncalloramos release after supplying a paid Apple Developer Team ID:
+
+```bash
+T3CODE_APPLE_TEAM_ID=YOURTEAMID vp run ios:goncalloramos
+```
+
+Use private TestFlight or ad-hoc distribution. The variant does not use the upstream Expo owner,
+EAS project, update URL, Apple Team, or any `com.t3tools.*` application identifier. Configure
+`T3CODE_EAS_PROJECT_ID` only after creating a dedicated private EAS project. See
+[`../../docs/user/goncalloramos-remote-mode.md`](../../docs/user/goncalloramos-remote-mode.md).
 
 Run static checks for mobile native code:
 

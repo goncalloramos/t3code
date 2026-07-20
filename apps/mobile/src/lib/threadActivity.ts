@@ -1,4 +1,5 @@
 import { ApprovalRequestId, isToolLifecycleItemType } from "@t3tools/contracts";
+import { extractDirectWorkLogImages, type WorkLogImage } from "@t3tools/client-runtime/chat-images";
 import type {
   OrchestrationLatestTurn,
   OrchestrationThread,
@@ -53,6 +54,7 @@ export interface ThreadFeedActivity {
     | "zap";
   readonly toolLike: boolean;
   readonly status: "success" | "failure" | "neutral" | null;
+  readonly images?: ReadonlyArray<WorkLogImage>;
 }
 
 const MAX_VISIBLE_WORK_LOG_ENTRIES = 1;
@@ -74,6 +76,7 @@ interface WorkLogEntry {
   requestKind?: PendingApproval["requestKind"];
   toolLifecycleStatus?: WorkLogToolLifecycleStatus;
   toolData?: unknown;
+  images?: ReadonlyArray<WorkLogImage>;
 }
 
 interface DerivedWorkLogEntry extends WorkLogEntry {
@@ -322,6 +325,10 @@ function toDerivedWorkLogEntry(activity: OrchestrationThreadActivity): DerivedWo
       entry.toolData = data.item;
     }
   }
+  const images = extractDirectWorkLogImages(payload?.data, title ?? activity.summary);
+  if (images.length > 0) {
+    entry.images = images;
+  }
   if (itemType) {
     entry.itemType = itemType;
   }
@@ -387,6 +394,7 @@ function mergeDerivedWorkLogEntries(
   const collapseKey = next.collapseKey ?? previous.collapseKey;
   const toolLifecycleStatus = next.toolLifecycleStatus ?? previous.toolLifecycleStatus;
   const toolData = next.toolData ?? previous.toolData;
+  const images = next.images ?? previous.images;
   return {
     ...previous,
     ...next,
@@ -400,6 +408,7 @@ function mergeDerivedWorkLogEntries(
     ...(collapseKey ? { collapseKey } : {}),
     ...(toolLifecycleStatus ? { toolLifecycleStatus } : {}),
     ...(toolData !== undefined ? { toolData } : {}),
+    ...(images !== undefined ? { images } : {}),
   };
 }
 
@@ -1360,6 +1369,7 @@ export function buildThreadFeed(
                 .join("\n"),
               toolLike: workLogEntryIsToolLike(entry),
               status: workEntryStatus(entry),
+              ...(entry.images !== undefined ? { images: entry.images } : {}),
             },
           };
         }),

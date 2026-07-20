@@ -1,0 +1,5 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <image href="../prod/black-macos-1024.png" width="1024" height="1024" />
+  <circle cx="512" cy="795" r="64" fill="#FFFFFF" fill-opacity="0.14" stroke="#FFFFFF" stroke-opacity="0.32" stroke-width="3" />
+  <text x="512" y="819" fill="#FFFFFF" font-family="Helvetica Neue, Helvetica, sans-serif" font-size="72" font-weight="700" text-anchor="middle">G</text>
+</svg>

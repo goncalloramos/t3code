@@ -32,6 +32,18 @@ export function findProjectById(
   return readModel.projects.find((project) => project.id === projectId);
 }
 
+export function findActiveProjectByWorkspaceRoot(
+  readModel: OrchestrationReadModel,
+  workspaceRoot: string,
+): OrchestrationProject | undefined {
+  const normalizedWorkspaceRoot = normalizeProjectPathForComparison(workspaceRoot);
+  return readModel.projects.find(
+    (project) =>
+      project.deletedAt === null &&
+      normalizeProjectPathForComparison(project.workspaceRoot) === normalizedWorkspaceRoot,
+  );
+}
+
 export function listThreadsByProjectId(
   readModel: OrchestrationReadModel,
   projectId: ProjectId,
@@ -52,6 +64,25 @@ export function requireProject(input: {
     invariantError(
       input.command.type,
       `Project '${input.projectId}' does not exist for command '${input.command.type}'.`,
+    ),
+  );
+}
+
+export function requireActiveProject(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: OrchestrationCommand;
+  readonly projectId: ProjectId;
+}): Effect.Effect<OrchestrationProject, OrchestrationCommandInvariantError> {
+  return requireProject(input).pipe(
+    Effect.flatMap((project) =>
+      project.deletedAt === null
+        ? Effect.succeed(project)
+        : Effect.fail(
+            invariantError(
+              input.command.type,
+              `Project '${input.projectId}' is deleted and cannot be relocated.`,
+            ),
+          ),
     ),
   );
 }
@@ -79,19 +110,38 @@ export function requireActiveProjectWorkspaceRootAbsent(input: {
   readonly exceptProjectId?: ProjectId;
 }): Effect.Effect<void, OrchestrationCommandInvariantError> {
   const normalizedWorkspaceRoot = normalizeProjectPathForComparison(input.workspaceRoot);
-  const existingProject = input.readModel.projects.find(
-    (project) =>
-      project.deletedAt === null &&
-      normalizeProjectPathForComparison(project.workspaceRoot) === normalizedWorkspaceRoot &&
-      project.id !== input.exceptProjectId,
-  );
+  const existingProject = findActiveProjectByWorkspaceRoot(input.readModel, input.workspaceRoot);
   if (existingProject === undefined) {
+    return Effect.void;
+  }
+  if (existingProject.id === input.exceptProjectId) {
     return Effect.void;
   }
   return Effect.fail(
     invariantError(
       input.command.type,
       `Active project '${existingProject.id}' already exists for workspace root '${normalizedWorkspaceRoot}'.`,
+    ),
+  );
+}
+
+export function requireProjectRelocationIdle(input: {
+  readonly readModel: OrchestrationReadModel;
+  readonly command: OrchestrationCommand;
+  readonly projectId: ProjectId;
+}): Effect.Effect<void, OrchestrationCommandInvariantError> {
+  const blockingThread = listThreadsByProjectId(input.readModel, input.projectId).find(
+    (thread) =>
+      thread.deletedAt === null &&
+      (thread.latestTurn?.state === "running" || (thread.session?.activeTurnId ?? null) !== null),
+  );
+  if (!blockingThread) {
+    return Effect.void;
+  }
+  return Effect.fail(
+    invariantError(
+      input.command.type,
+      `Project '${input.projectId}' cannot be relocated while thread '${blockingThread.id}' has a running turn or pending interaction.`,
     ),
   );
 }

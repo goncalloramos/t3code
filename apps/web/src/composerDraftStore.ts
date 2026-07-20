@@ -391,6 +391,10 @@ interface ComposerDraftStoreState {
     },
   ) => void;
   clearProjectDraftThreadId: (projectRef: ScopedProjectRef) => void;
+  relocateProjectDraft: (
+    sourceProjectRef: ScopedProjectRef,
+    destinationProjectRef: ScopedProjectRef,
+  ) => "none" | "moved" | "conflict";
   clearProjectDraftThreadById: (
     projectRef: ScopedProjectRef,
     threadRef: ComposerThreadTarget,
@@ -2406,6 +2410,55 @@ const composerDraftStore = create<ComposerDraftStoreState>()(
             }
             return removeDraftThreadReferences(state, matchingThreadEntry[0]);
           });
+        },
+        relocateProjectDraft: (sourceProjectRef, destinationProjectRef) => {
+          const state = get();
+          const sourceEntry = Object.entries(state.draftThreadsByThreadKey).find(
+            ([, draftThread]) =>
+              draftThread.projectId === sourceProjectRef.projectId &&
+              draftThread.environmentId === sourceProjectRef.environmentId,
+          );
+          if (!sourceEntry) {
+            return "none";
+          }
+          const destinationEntry = Object.entries(state.draftThreadsByThreadKey).find(
+            ([, draftThread]) =>
+              draftThread.projectId === destinationProjectRef.projectId &&
+              draftThread.environmentId === destinationProjectRef.environmentId,
+          );
+          if (destinationEntry && destinationEntry[0] !== sourceEntry[0]) {
+            return "conflict";
+          }
+
+          const [draftId, sourceDraft] = sourceEntry;
+          const sourceLogicalKey = projectDraftKey(sourceProjectRef);
+          const destinationLogicalKey = projectDraftKey(destinationProjectRef);
+          set((current) => {
+            const nextMappings = {
+              ...current.logicalProjectDraftThreadKeyByLogicalProjectKey,
+              [destinationLogicalKey]: draftId,
+            };
+            if (sourceLogicalKey !== destinationLogicalKey) {
+              delete nextMappings[sourceLogicalKey];
+            }
+            return {
+              draftThreadsByThreadKey: {
+                ...current.draftThreadsByThreadKey,
+                [draftId]: {
+                  ...sourceDraft,
+                  environmentId: destinationProjectRef.environmentId,
+                  projectId: destinationProjectRef.projectId,
+                  logicalProjectKey: destinationLogicalKey,
+                  branch: null,
+                  worktreePath: null,
+                  envMode: "local",
+                  startFromOrigin: false,
+                },
+              },
+              logicalProjectDraftThreadKeyByLogicalProjectKey: nextMappings,
+            };
+          });
+          return "moved";
         },
         clearProjectDraftThreadById: (projectRef, threadRef) => {
           const threadKey = resolveComposerDraftKey(get(), threadRef) ?? "";

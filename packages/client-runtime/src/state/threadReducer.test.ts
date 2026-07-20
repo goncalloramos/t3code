@@ -164,6 +164,29 @@ describe("applyThreadDetailEvent", () => {
     });
   });
 
+  describe("thread.project-updated", () => {
+    it("moves the thread to the destination project", () => {
+      const result = applyThreadDetailEvent(baseThread, {
+        ...baseEventFields,
+        sequence: 5,
+        occurredAt: "2026-04-01T05:00:00.000Z",
+        aggregateKind: "thread",
+        aggregateId: ThreadId.make("thread-1"),
+        type: "thread.project-updated",
+        payload: {
+          threadId: ThreadId.make("thread-1"),
+          projectId: ProjectId.make("project-2"),
+          updatedAt: "2026-04-01T05:00:00.000Z",
+        },
+      });
+
+      expect(result.kind).toBe("updated");
+      if (result.kind === "updated") {
+        expect(result.thread.projectId).toBe("project-2");
+      }
+    });
+  });
+
   describe("thread.meta-updated", () => {
     it("patches title and branch", () => {
       const result = applyThreadDetailEvent(baseThread, {

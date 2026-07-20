@@ -1,11 +1,13 @@
-# Codex quota custom desktop build
+# Codex quota goncalloramos desktop build
 
 This fork ships the Codex quota UI and custom desktop identity from its `main` branch. The official
 T3 Code development line is tracked separately as `upstream/main`; custom commits must never be
 pushed to that remote.
 
-The packaged desktop app uses the product name `T3 Code Custom`, the app ID
-`com.goncalloramos.t3code-custom`, separate executable names, and user-data directory names.
+The packaged desktop app uses the product name `T3 Code - goncalloramos`, app ID
+`com.goncalloramos.t3code`, executable `t3code-goncalloramos`, URL scheme
+`t3code-goncalloramos`, Application Support directory `T3 Code - goncalloramos`, and runtime home
+`~/.t3-goncalloramos`.
 Production auto-updates are disabled in this build, so an official T3 Code release
 cannot replace it. The updater mock remains available to updater tests and local development.
 
@@ -50,4 +52,4 @@ pnpm run dist:desktop:dmg:arm64
 ```
 
 Do not set `T3CODE_DESKTOP_UPDATE_REPOSITORY` to `pingdotgg/t3code`. Auto-updates are disabled for
-this custom build, but custom releases should still be published only from this fork.
+this fork build, but releases should still be published only from this fork.

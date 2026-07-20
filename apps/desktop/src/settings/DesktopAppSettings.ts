@@ -23,6 +23,10 @@ export interface DesktopSettings {
   readonly serverExposureMode: DesktopServerExposureMode;
   readonly tailscaleServeEnabled: boolean;
   readonly tailscaleServePort: number;
+  readonly remoteModeEnabled: boolean;
+  readonly remoteModePreventSystemSleep: boolean;
+  readonly remoteModeLaunchAtLogin: boolean;
+  readonly remoteModeOwnsLoginItem: boolean;
   readonly updateChannel: DesktopUpdateChannel;
   readonly updateChannelConfiguredByUser: boolean;
   // Was a "local" | "wsl" swap mode in an earlier iteration of the WSL
@@ -53,6 +57,10 @@ export const DEFAULT_DESKTOP_SETTINGS: DesktopSettings = {
   serverExposureMode: "local-only",
   tailscaleServeEnabled: false,
   tailscaleServePort: DEFAULT_TAILSCALE_SERVE_PORT,
+  remoteModeEnabled: false,
+  remoteModePreventSystemSleep: true,
+  remoteModeLaunchAtLogin: true,
+  remoteModeOwnsLoginItem: false,
   updateChannel: "latest",
   updateChannelConfiguredByUser: false,
   wslBackendEnabled: false,
@@ -64,6 +72,10 @@ const DesktopSettingsDocument = Schema.Struct({
   serverExposureMode: Schema.optionalKey(DesktopServerExposureModeSchema),
   tailscaleServeEnabled: Schema.optionalKey(Schema.Boolean),
   tailscaleServePort: Schema.optionalKey(Schema.Number),
+  remoteModeEnabled: Schema.optionalKey(Schema.Boolean),
+  remoteModePreventSystemSleep: Schema.optionalKey(Schema.Boolean),
+  remoteModeLaunchAtLogin: Schema.optionalKey(Schema.Boolean),
+  remoteModeOwnsLoginItem: Schema.optionalKey(Schema.Boolean),
   updateChannel: Schema.optionalKey(DesktopUpdateChannelSchema),
   updateChannelConfiguredByUser: Schema.optionalKey(Schema.Boolean),
   // Newer form of the WSL toggle. `wslMode` is still accepted on load so
@@ -120,6 +132,12 @@ export class DesktopAppSettings extends Context.Service<
     readonly setTailscaleServe: (input: {
       readonly enabled: boolean;
       readonly port: Option.Option<number>;
+    }) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
+    readonly setRemoteModePreferences: (input: {
+      readonly enabled: boolean;
+      readonly preventSystemSleep: boolean;
+      readonly launchAtLogin: boolean;
+      readonly ownsLoginItem?: boolean;
     }) => Effect.Effect<DesktopSettingsChange, DesktopSettingsWriteError>;
     readonly setUpdateChannel: (
       channel: DesktopUpdateChannel,
@@ -181,6 +199,10 @@ function normalizeDesktopSettingsDocument(
       parsed.serverExposureMode === "network-accessible" ? "network-accessible" : "local-only",
     tailscaleServeEnabled: parsed.tailscaleServeEnabled === true,
     tailscaleServePort: normalizeTailscaleServePort(parsed.tailscaleServePort),
+    remoteModeEnabled: parsed.remoteModeEnabled === true,
+    remoteModePreventSystemSleep: parsed.remoteModePreventSystemSleep !== false,
+    remoteModeLaunchAtLogin: parsed.remoteModeLaunchAtLogin !== false,
+    remoteModeOwnsLoginItem: parsed.remoteModeOwnsLoginItem === true,
     updateChannel: updateChannelConfiguredByUser
       ? Option.getOrElse(parsedUpdateChannel, () => defaultSettings.updateChannel)
       : defaultSettings.updateChannel,
@@ -205,6 +227,18 @@ function toDesktopSettingsDocument(
   }
   if (settings.tailscaleServePort !== defaults.tailscaleServePort) {
     document.tailscaleServePort = settings.tailscaleServePort;
+  }
+  if (settings.remoteModeEnabled !== defaults.remoteModeEnabled) {
+    document.remoteModeEnabled = settings.remoteModeEnabled;
+  }
+  if (settings.remoteModePreventSystemSleep !== defaults.remoteModePreventSystemSleep) {
+    document.remoteModePreventSystemSleep = settings.remoteModePreventSystemSleep;
+  }
+  if (settings.remoteModeLaunchAtLogin !== defaults.remoteModeLaunchAtLogin) {
+    document.remoteModeLaunchAtLogin = settings.remoteModeLaunchAtLogin;
+  }
+  if (settings.remoteModeOwnsLoginItem !== defaults.remoteModeOwnsLoginItem) {
+    document.remoteModeOwnsLoginItem = settings.remoteModeOwnsLoginItem;
   }
   if (settings.updateChannel !== defaults.updateChannel) {
     document.updateChannel = settings.updateChannel;
@@ -251,6 +285,30 @@ function setTailscaleServe(
         ...settings,
         tailscaleServeEnabled: input.enabled,
         tailscaleServePort: port,
+      };
+}
+
+function setRemoteModePreferences(
+  settings: DesktopSettings,
+  input: {
+    readonly enabled: boolean;
+    readonly preventSystemSleep: boolean;
+    readonly launchAtLogin: boolean;
+    readonly ownsLoginItem?: boolean;
+  },
+): DesktopSettings {
+  const remoteModeOwnsLoginItem = input.ownsLoginItem ?? settings.remoteModeOwnsLoginItem;
+  return settings.remoteModeEnabled === input.enabled &&
+    settings.remoteModePreventSystemSleep === input.preventSystemSleep &&
+    settings.remoteModeLaunchAtLogin === input.launchAtLogin &&
+    settings.remoteModeOwnsLoginItem === remoteModeOwnsLoginItem
+    ? settings
+    : {
+        ...settings,
+        remoteModeEnabled: input.enabled,
+        remoteModePreventSystemSleep: input.preventSystemSleep,
+        remoteModeLaunchAtLogin: input.launchAtLogin,
+        remoteModeOwnsLoginItem,
       };
 }
 
@@ -439,6 +497,10 @@ export const make = Effect.gen(function* () {
       persist((settings) => setTailscaleServe(settings, input)).pipe(
         Effect.withSpan("desktop.settings.setTailscaleServe", { attributes: input }),
       ),
+    setRemoteModePreferences: (input) =>
+      persist((settings) => setRemoteModePreferences(settings, input)).pipe(
+        Effect.withSpan("desktop.settings.setRemoteModePreferences", { attributes: input }),
+      ),
     setUpdateChannel: (channel) =>
       persist((settings) => setUpdateChannel(settings, channel)).pipe(
         Effect.withSpan("desktop.settings.setUpdateChannel", { attributes: { channel } }),
@@ -491,6 +553,8 @@ export const layerTest = (initialSettings: DesktopSettings = DEFAULT_DESKTOP_SET
         setServerExposureMode: (mode) =>
           update((settings) => setServerExposureMode(settings, mode)),
         setTailscaleServe: (input) => update((settings) => setTailscaleServe(settings, input)),
+        setRemoteModePreferences: (input) =>
+          update((settings) => setRemoteModePreferences(settings, input)),
         setUpdateChannel: (channel) => update((settings) => setUpdateChannel(settings, channel)),
         setWslBackendEnabled: (enabled) =>
           update((settings) => setWslBackendEnabled(settings, enabled)),

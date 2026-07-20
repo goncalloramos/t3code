@@ -101,6 +101,16 @@ export function applyThreadDetailEvent(
       };
 
     // ── Thread metadata ─────────────────────────────────────────────
+    case "thread.project-updated":
+      return {
+        kind: "updated",
+        thread: {
+          ...thread,
+          projectId: event.payload.projectId,
+          updatedAt: event.payload.updatedAt,
+        },
+      };
+
     case "thread.meta-updated":
       return {
         kind: "updated",

@@ -36,6 +36,8 @@ import * as DesktopLocalEnvironmentAuth from "./backend/DesktopLocalEnvironmentA
 import * as DesktopNetworkInterfaces from "./backend/DesktopNetworkInterfaces.ts";
 import * as DesktopEnvironment from "./app/DesktopEnvironment.ts";
 import * as DesktopLifecycle from "./app/DesktopLifecycle.ts";
+import * as DesktopHostAwake from "./app/DesktopHostAwake.ts";
+import * as DesktopRemoteAccess from "./app/DesktopRemoteAccess.ts";
 import * as DesktopShutdown from "./app/DesktopShutdown.ts";
 import * as DesktopObservability from "./app/DesktopObservability.ts";
 import * as DesktopServerExposure from "./backend/DesktopServerExposure.ts";
@@ -168,12 +170,19 @@ const desktopLocalEnvironmentAuthLayer = DesktopLocalEnvironmentAuth.layer.pipe(
   Layer.provideMerge(desktopBackendLayer),
 );
 
+const desktopRemoteAccessLayer = DesktopRemoteAccess.layer.pipe(
+  Layer.provideMerge(DesktopHostAwake.layer),
+  Layer.provideMerge(desktopServerExposureLayer),
+  Layer.provideMerge(desktopFoundationLayer),
+);
+
 const desktopApplicationLayer = Layer.mergeAll(
   DesktopLifecycle.layer,
   DesktopApplicationMenu.layer,
   DesktopShellEnvironment.layer,
   desktopSshLayer,
 ).pipe(
+  Layer.provideMerge(desktopRemoteAccessLayer),
   Layer.provideMerge(DesktopUpdates.layer),
   Layer.provideMerge(desktopWslBackendLayer),
   Layer.provideMerge(desktopLocalEnvironmentAuthLayer),
@@ -196,5 +205,21 @@ const desktopRuntimeLayer = desktopClerkLayer.pipe(
     ),
   ),
 );
+
+const trimNonEmpty = (value: string | undefined): string | undefined => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+};
+
+const earlyUserDataPath = DesktopAppIdentity.migrateDesktopIdentityBeforeReady({
+  homeDirectory: NodeOS.homedir(),
+  // oxlint-disable-next-line t3code/no-global-process-runtime -- This must run synchronously before Electron's ready event; the Effect host services initialize afterward.
+  platform: process.platform,
+  isDevelopment: trimNonEmpty(process.env.VITE_DEV_SERVER_URL) !== undefined,
+  t3HomeOverride: trimNonEmpty(process.env.T3CODE_HOME),
+  appDataDirectoryOverride: trimNonEmpty(process.env.APPDATA),
+  xdgConfigHomeOverride: trimNonEmpty(process.env.XDG_CONFIG_HOME),
+});
+Electron.app.setPath("userData", earlyUserDataPath);
 
 DesktopApp.program.pipe(Effect.provide(desktopRuntimeLayer), NodeRuntime.runMain);

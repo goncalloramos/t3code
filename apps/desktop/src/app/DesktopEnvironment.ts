@@ -12,6 +12,7 @@ import * as Option from "effect/Option";
 import * as Path from "effect/Path";
 
 import * as DesktopAppSettings from "../settings/DesktopAppSettings.ts";
+import { GONCALLORAMOS_PRODUCT_IDENTITY } from "../../../../scripts/lib/product-identity.ts";
 import * as DesktopConfig from "./DesktopConfig.ts";
 import { isNightlyDesktopVersion } from "../updates/updateChannels.ts";
 
@@ -42,6 +43,8 @@ export class DesktopEnvironment extends Context.Service<
     readonly homeDirectory: string;
     readonly appDataDirectory: string;
     readonly baseDir: string;
+    readonly legacyBaseDir: string;
+    readonly shouldMigrateRuntimeHome: boolean;
     readonly stateDir: string;
     readonly desktopSettingsPath: string;
     readonly clientSettingsPath: string;
@@ -76,7 +79,7 @@ export class DesktopEnvironment extends Context.Service<
   }
 >()("@t3tools/desktop/app/DesktopEnvironment") {}
 
-const APP_BASE_NAME = "T3 Code Custom";
+const APP_BASE_NAME = GONCALLORAMOS_PRODUCT_IDENTITY.displayName;
 
 function resolveDesktopAppStageLabel(input: {
   readonly isDevelopment: boolean;
@@ -86,7 +89,7 @@ function resolveDesktopAppStageLabel(input: {
     return "Dev";
   }
 
-  return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Custom";
+  return isNightlyDesktopVersion(input.appVersion) ? "Nightly" : "Stable";
 }
 
 function resolveDesktopAppBranding(input: {
@@ -97,7 +100,7 @@ function resolveDesktopAppBranding(input: {
   return {
     baseName: APP_BASE_NAME,
     stageLabel,
-    displayName: stageLabel === "Custom" ? APP_BASE_NAME : `${APP_BASE_NAME} (${stageLabel})`,
+    displayName: stageLabel === "Stable" ? APP_BASE_NAME : `${APP_BASE_NAME} (${stageLabel})`,
   };
 }
 
@@ -147,7 +150,12 @@ const make = Effect.fn("desktop.environment.make")(function* (
       : input.platform === "darwin"
         ? path.join(homeDirectory, "Library", "Application Support")
         : Option.getOrElse(config.xdgConfigHome, () => path.join(homeDirectory, ".config"));
-  const baseDir = Option.getOrElse(config.t3Home, () => path.join(homeDirectory, ".t3"));
+  const defaultBaseDir = path.join(
+    homeDirectory,
+    GONCALLORAMOS_PRODUCT_IDENTITY.runtimeHomeDirectoryName,
+  );
+  const baseDir = Option.getOrElse(config.t3Home, () => defaultBaseDir);
+  const legacyBaseDir = path.join(homeDirectory, ".t3");
   const rootDir = path.resolve(input.dirname, "../../..");
   const appRoot = input.isPackaged ? input.appPath : rootDir;
   const branding = resolveDesktopAppBranding({
@@ -156,7 +164,9 @@ const make = Effect.fn("desktop.environment.make")(function* (
   });
   const displayName = branding.displayName;
   const stateDir = path.join(baseDir, isDevelopment ? "dev" : "userdata");
-  const userDataDirName = isDevelopment ? "t3code-custom-dev" : "t3code-custom";
+  const userDataDirName = isDevelopment
+    ? `${GONCALLORAMOS_PRODUCT_IDENTITY.applicationSupportDirectoryName} (Dev)`
+    : GONCALLORAMOS_PRODUCT_IDENTITY.applicationSupportDirectoryName;
   const legacyUserDataDirName = isDevelopment ? "T3 Code Custom (Dev)" : "T3 Code Custom";
   const resourcesPath = input.resourcesPath;
 
@@ -173,6 +183,8 @@ const make = Effect.fn("desktop.environment.make")(function* (
     homeDirectory,
     appDataDirectory,
     baseDir,
+    legacyBaseDir,
+    shouldMigrateRuntimeHome: Option.isNone(config.t3Home),
     stateDir,
     desktopSettingsPath: path.join(stateDir, "desktop-settings.json"),
     clientSettingsPath: path.join(stateDir, "client-settings.json"),
@@ -197,10 +209,16 @@ const make = Effect.fn("desktop.environment.make")(function* (
     branding,
     displayName,
     appUserModelId: Option.getOrElse(config.appUserModelIdOverride, () =>
-      isDevelopment ? "com.goncalloramos.t3code-custom.dev" : "com.goncalloramos.t3code-custom",
+      isDevelopment
+        ? GONCALLORAMOS_PRODUCT_IDENTITY.desktopDevelopmentAppId
+        : GONCALLORAMOS_PRODUCT_IDENTITY.desktopAppId,
     ),
-    linuxDesktopEntryName: isDevelopment ? "t3code-custom-dev.desktop" : "t3code-custom.desktop",
-    linuxWmClass: isDevelopment ? "t3code-custom-dev" : "t3code-custom",
+    linuxDesktopEntryName: isDevelopment
+      ? GONCALLORAMOS_PRODUCT_IDENTITY.linuxDevelopmentDesktopEntryName
+      : GONCALLORAMOS_PRODUCT_IDENTITY.linuxDesktopEntryName,
+    linuxWmClass: isDevelopment
+      ? GONCALLORAMOS_PRODUCT_IDENTITY.linuxDevelopmentWmClass
+      : GONCALLORAMOS_PRODUCT_IDENTITY.linuxWmClass,
     userDataDirName,
     legacyUserDataDirName,
     defaultDesktopSettings: DesktopAppSettings.resolveDefaultDesktopSettings(input.appVersion),

@@ -7,7 +7,7 @@ import {
   TerminalIcon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { type ReactNode, memo, useCallback, useMemo, useState } from "react";
+import { type ReactNode, memo, useCallback, useEffect, useMemo, useState } from "react";
 import {
   AuthAccessReadScope,
   AuthAccessWriteScope,
@@ -26,6 +26,7 @@ import {
   type DesktopDiscoveredSshHost,
   type DesktopSshEnvironmentTarget,
   type DesktopServerExposureState,
+  type DesktopRemoteModeState,
   type DesktopWslState,
   type EnvironmentId,
 } from "@t3tools/contracts";
@@ -1762,6 +1763,53 @@ export function ConnectionsSettings() {
   }, [savedEnvironments]);
   const [sshConnectionError, setSshConnectionError] = useState<string | null>(null);
   const [connectingSshHostAlias, setConnectingSshHostAlias] = useState<string | null>(null);
+  const [remoteModeState, setRemoteModeState] = useState<DesktopRemoteModeState | null>(null);
+  const [remoteModeError, setRemoteModeError] = useState<string | null>(null);
+  const [isUpdatingRemoteMode, setIsUpdatingRemoteMode] = useState(false);
+
+  useEffect(() => {
+    if (!desktopBridge) return;
+    let cancelled = false;
+    void desktopBridge
+      .getRemoteModeState()
+      .then((state) => {
+        if (cancelled) return;
+        setRemoteModeState(state);
+        setRemoteModeError(null);
+      })
+      .catch((error: unknown) => {
+        if (cancelled) return;
+        setRemoteModeError(
+          error instanceof Error ? error.message : "Could not read Remote Mode state.",
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [desktopBridge]);
+
+  const updateRemoteMode = useCallback(
+    async (patch: Partial<DesktopRemoteModeState["preferences"]>) => {
+      if (!desktopBridge || !remoteModeState) return;
+      setIsUpdatingRemoteMode(true);
+      setRemoteModeError(null);
+      try {
+        setRemoteModeState(
+          await desktopBridge.setRemoteModePreferences({
+            ...remoteModeState.preferences,
+            ...patch,
+          }),
+        );
+      } catch (error) {
+        setRemoteModeError(
+          error instanceof Error ? error.message : "Could not update Remote Mode.",
+        );
+      } finally {
+        setIsUpdatingRemoteMode(false);
+      }
+    },
+    [desktopBridge, remoteModeState],
+  );
 
   const [desktopServerExposureMutationError, setDesktopServerExposureMutationError] = useState<
     string | null
@@ -2882,6 +2930,144 @@ export function ConnectionsSettings() {
       }
     />
   );
+  const renderRemoteModeRows = () => {
+    if (!desktopBridge) return null;
+    const preferences = remoteModeState?.preferences;
+    const description = remoteModeError
+      ? remoteModeError
+      : remoteModeState?.status === "ready"
+        ? `Ready at ${remoteModeState.endpointUrl}`
+        : (remoteModeState?.detail ?? "Private iPhone access through Tailscale HTTPS.");
+    return (
+      <>
+        <SettingsRow
+          title="Remote Mode"
+          description={description}
+          status={
+            remoteModeError ? <span className="text-destructive">Action required</span> : null
+          }
+          control={
+            <Switch
+              checked={preferences?.enabled ?? false}
+              disabled={isUpdatingRemoteMode || preferences === undefined}
+              onCheckedChange={(enabled) => void updateRemoteMode({ enabled })}
+              aria-label="Enable Remote Mode"
+            />
+          }
+        />
+        {preferences?.enabled ? (
+          <>
+            <SettingsRow
+              title="Prevent Mac sleep"
+              description="Keep the Mac reachable while allowing its display to sleep."
+              className="bg-muted/20 pl-7 sm:pl-8"
+              control={
+                <Switch
+                  checked={preferences.preventSystemSleep}
+                  disabled={isUpdatingRemoteMode}
+                  onCheckedChange={(preventSystemSleep) =>
+                    void updateRemoteMode({ preventSystemSleep })
+                  }
+                  aria-label="Prevent Mac sleep"
+                />
+              }
+            />
+            <SettingsRow
+              title="Launch at login"
+              description="Start the desktop host automatically after signing in to macOS."
+              className="bg-muted/20 pl-7 sm:pl-8"
+              control={
+                <Switch
+                  checked={preferences.launchAtLogin}
+                  disabled={isUpdatingRemoteMode}
+                  onCheckedChange={(launchAtLogin) => void updateRemoteMode({ launchAtLogin })}
+                  aria-label="Launch Remote Mode at login"
+                />
+              }
+            />
+            {remoteModeState?.status === "ready" ? (
+              <>
+                <SettingsRow
+                  title="Verified endpoint"
+                  description={remoteModeState.endpointUrl ?? "Verified Tailscale HTTPS endpoint"}
+                  className="bg-muted/20 pl-7 sm:pl-8"
+                  status={<span className="text-success">Ready</span>}
+                />
+                <SettingsRow
+                  title="Mac awake"
+                  description="The scoped sleep assertion follows Remote Mode and desktop shutdown."
+                  className="bg-muted/20 pl-7 sm:pl-8"
+                  status={
+                    <span
+                      className={
+                        remoteModeState.sleepAssertionActive
+                          ? "text-success"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      {remoteModeState.sleepAssertionActive ? "Active" : "Inactive"}
+                    </span>
+                  }
+                />
+                <SettingsRow
+                  title="Login item"
+                  description="Remote Mode only removes a login item that it created."
+                  className="bg-muted/20 pl-7 sm:pl-8"
+                  status={
+                    <span
+                      className={
+                        remoteModeState.loginItemActive ? "text-success" : "text-muted-foreground"
+                      }
+                    >
+                      {remoteModeState.loginItemActive ? "Active" : "Inactive"}
+                    </span>
+                  }
+                />
+                <SettingsRow
+                  title="Authorized clients"
+                  description="Create pairing links and revoke clients in the section below."
+                  className="bg-muted/20 pl-7 sm:pl-8"
+                  status={
+                    <span className="text-muted-foreground">
+                      {desktopClientSessions.length.toLocaleString()}
+                    </span>
+                  }
+                />
+              </>
+            ) : (
+              <SettingsRow
+                title="Remote endpoint"
+                description="Retry after starting Tailscale or changing MagicDNS settings."
+                className="bg-muted/20 pl-7 sm:pl-8"
+                control={
+                  <Button
+                    size="xs"
+                    variant="outline"
+                    disabled={isUpdatingRemoteMode}
+                    onClick={() => {
+                      if (!desktopBridge) return;
+                      setIsUpdatingRemoteMode(true);
+                      void desktopBridge
+                        .retryRemoteMode()
+                        .then(setRemoteModeState)
+                        .catch((error: unknown) =>
+                          setRemoteModeError(
+                            error instanceof Error ? error.message : "Could not retry Remote Mode.",
+                          ),
+                        )
+                        .finally(() => setIsUpdatingRemoteMode(false));
+                    }}
+                  >
+                    Retry
+                  </Button>
+                }
+              />
+            )}
+          </>
+        ) : null}
+      </>
+    );
+  };
   const renderAuthorizedClients = (presentation: AccessSectionPresentation) => (
     <>
       {desktopAccessManagementError ? (
@@ -2987,6 +3173,7 @@ export function ConnectionsSettings() {
             {desktopBridge ? (
               <>
                 {renderNetworkAccessRow()}
+                {renderRemoteModeRows()}
                 {renderEndpointRows("endpoint-rail")}
                 {renderTailscaleRow()}
                 {renderWslRow()}

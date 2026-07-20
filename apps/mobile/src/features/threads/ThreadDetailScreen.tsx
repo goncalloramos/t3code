@@ -248,11 +248,11 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const composerOverlapHeight = composerChrome + composerBottomInset;
   const activeWorkIndicatorHeight = props.activeWorkStartedAt ? WORKING_INDICATOR_HEIGHT : 0;
   const estimatedOverlayHeight = composerOverlapHeight + activeWorkIndicatorHeight;
-  // The overlay's measured height includes the home-indicator inset (the
+  // The measured composer height includes the home-indicator inset (the
   // composer pads it), but contentInsetAdjustmentBehavior="automatic" makes
   // UIKit add the safe-area bottom to the content inset AGAIN — leaving a
   // dead strip between the resting content and the composer. Report the
-  // overlay height minus the safe area; UIKit adds it back, and ThreadFeed
+  // composer height minus the safe area; UIKit adds it back, and ThreadFeed
   // hands LegendList the same delta via contentInsetEndStaticAdjustment so
   // its end-scroll math matches the real resting position.
   const nativeInsetOvercount =
@@ -260,7 +260,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
   const { contentInsetEndAdjustment, onComposerLayout } = useKeyboardChatComposerInset(
     listRef,
     composerOverlayRef,
-    Math.max(0, estimatedOverlayHeight - nativeInsetOvercount),
+    Math.max(0, composerOverlapHeight - nativeInsetOvercount),
     -nativeInsetOvercount,
   );
   const { freeze, scrollMessageToEnd } = useKeyboardScrollToEnd({ listRef });
@@ -410,6 +410,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             contentInsetEndAdjustment={contentInsetEndAdjustment}
             contentTopInset={0}
             contentBottomInset={estimatedOverlayHeight}
+            contentEndSpacer={activeWorkIndicatorHeight}
             contentMaxWidth={contentMaxWidth}
             layoutVariant={layoutVariant}
             usesAutomaticContentInsets={props.usesAutomaticContentInsets}
@@ -427,24 +428,28 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
           style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}
           offset={{ closed: 0, opened: 0 }}
         >
-          {/* No paddingTop here: the overlay's measured height becomes the
-              list's bottom inset, so any padding above the pill/composer
-              pushes the resting content floor up by the same amount. */}
-          <View ref={composerOverlayRef} onLayout={onComposerLayout} className="w-full">
-            <Animated.View
-              className="w-full self-center"
-              layout={LinearTransition.duration(220)}
-              style={{ maxWidth: contentMaxWidth }}
-            >
-              {props.activeWorkStartedAt ? (
+          {/* The working pill has a matching real spacer in ThreadFeed so a
+              newly appearing pill moves the chat above it. Only the composer
+              and approval cards participate in the native keyboard inset. */}
+          <View className="w-full">
+            {props.activeWorkStartedAt ? (
+              <Animated.View
+                className="w-full self-center"
+                layout={LinearTransition.duration(220)}
+                style={{ maxWidth: contentMaxWidth }}
+              >
                 <WorkingDurationPill startedAt={props.activeWorkStartedAt} />
-              ) : null}
+              </Animated.View>
+            ) : null}
 
+            <View ref={composerOverlayRef} onLayout={onComposerLayout} className="w-full">
               {props.activePendingApproval || props.activePendingUserInput ? (
                 <Animated.View
-                  className="shrink-0 gap-3 px-4 pb-3"
+                  className="w-full shrink-0 self-center gap-3 px-4 pb-3"
                   entering={FadeInDown.duration(220)}
                   exiting={FadeOut.duration(140)}
+                  layout={LinearTransition.duration(220)}
+                  style={{ maxWidth: contentMaxWidth }}
                 >
                   {props.activePendingApproval ? (
                     <PendingApprovalCard
@@ -466,37 +471,37 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                   ) : null}
                 </Animated.View>
               ) : null}
-            </Animated.View>
 
-            <ThreadComposer
-              editorRef={composerEditorRef}
-              draftMessage={props.draftMessage}
-              draftAttachments={props.draftAttachments}
-              placeholder="Ask the repo agent, or run a command…"
-              contentMaxWidth={contentMaxWidth}
-              connectionState={props.connectionStateLabel}
-              connectionError={props.connectionError}
-              environmentLabel={props.environmentLabel}
-              threadSyncPhase={threadSyncPhase}
-              selectedThread={props.selectedThread}
-              serverConfig={props.serverConfig}
-              queueCount={props.selectedThreadQueueCount}
-              activeThreadBusy={props.activeThreadBusy}
-              environmentId={props.environmentId}
-              projectCwd={props.projectWorkspaceRoot}
-              bottomInset={composerBottomInset}
-              onChangeDraftMessage={props.onChangeDraftMessage}
-              onPickDraftImages={props.onPickDraftImages}
-              onNativePasteImages={props.onNativePasteImages}
-              onRemoveDraftImage={props.onRemoveDraftImage}
-              onStopThread={props.onStopThread}
-              onSendMessage={handleSendMessage}
-              onReconnectEnvironment={props.onReconnectEnvironment}
-              onUpdateModelSelection={props.onUpdateThreadModelSelection}
-              onUpdateRuntimeMode={props.onUpdateThreadRuntimeMode}
-              onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
-              onExpandedChange={setComposerExpanded}
-            />
+              <ThreadComposer
+                editorRef={composerEditorRef}
+                draftMessage={props.draftMessage}
+                draftAttachments={props.draftAttachments}
+                placeholder="Ask the repo agent, or run a command…"
+                contentMaxWidth={contentMaxWidth}
+                connectionState={props.connectionStateLabel}
+                connectionError={props.connectionError}
+                environmentLabel={props.environmentLabel}
+                threadSyncPhase={threadSyncPhase}
+                selectedThread={props.selectedThread}
+                serverConfig={props.serverConfig}
+                queueCount={props.selectedThreadQueueCount}
+                activeThreadBusy={props.activeThreadBusy}
+                environmentId={props.environmentId}
+                projectCwd={props.projectWorkspaceRoot}
+                bottomInset={composerBottomInset}
+                onChangeDraftMessage={props.onChangeDraftMessage}
+                onPickDraftImages={props.onPickDraftImages}
+                onNativePasteImages={props.onNativePasteImages}
+                onRemoveDraftImage={props.onRemoveDraftImage}
+                onStopThread={props.onStopThread}
+                onSendMessage={handleSendMessage}
+                onReconnectEnvironment={props.onReconnectEnvironment}
+                onUpdateModelSelection={props.onUpdateThreadModelSelection}
+                onUpdateRuntimeMode={props.onUpdateThreadRuntimeMode}
+                onUpdateInteractionMode={props.onUpdateThreadInteractionMode}
+                onExpandedChange={setComposerExpanded}
+              />
+            </View>
           </View>
         </KeyboardStickyView>
       ) : null}

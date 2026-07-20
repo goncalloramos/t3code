@@ -40,9 +40,15 @@ import {
   pickFolder,
   setTheme,
   showContextMenu,
+  showAgentNotification,
 } from "./methods/window.ts";
 import * as PreviewIpc from "./methods/preview.ts";
 import { getWslState, setWslBackendEnabled, setWslDistro, setWslOnly } from "./methods/wsl.ts";
+import {
+  getRemoteModeState,
+  retryRemoteMode,
+  setRemoteModePreferences,
+} from "./methods/remoteAccess.ts";
 
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
   const ipc = yield* DesktopIpc.DesktopIpc;
@@ -72,6 +78,9 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setServerExposureMode);
   yield* ipc.handle(setTailscaleServeEnabled);
   yield* ipc.handle(getAdvertisedEndpoints);
+  yield* ipc.handle(getRemoteModeState);
+  yield* ipc.handle(setRemoteModePreferences);
+  yield* ipc.handle(retryRemoteMode);
 
   yield* ipc.handle(getWslState);
   yield* ipc.handle(setWslBackendEnabled);
@@ -83,6 +92,7 @@ export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers"
   yield* ipc.handle(setTheme);
   yield* ipc.handle(showContextMenu);
   yield* ipc.handle(openExternal);
+  yield* ipc.handle(showAgentNotification);
   yield* ipc.handle(getUpdateState);
   yield* ipc.handle(setUpdateChannel);
   yield* ipc.handle(downloadUpdate);

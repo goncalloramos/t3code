@@ -19,6 +19,7 @@ import { Argument, Command, Flag } from "effect/unstable/cli";
 import { ChildProcess } from "effect/unstable/process";
 
 import { loadRepoEnv } from "./lib/public-config.ts";
+import { GONCALLORAMOS_PRODUCT_IDENTITY } from "./lib/product-identity.ts";
 
 Object.assign(process.env, loadRepoEnv());
 
@@ -30,7 +31,7 @@ const DESKTOP_DEV_LOOPBACK_HOST = "127.0.0.1";
 const DEV_PORT_PROBE_HOSTS = ["127.0.0.1", "0.0.0.0", "::1", "::"] as const;
 
 export const DEFAULT_T3_HOME = Effect.map(Effect.service(Path.Path), (path) =>
-  path.join(NodeOS.homedir(), ".t3"),
+  path.join(NodeOS.homedir(), GONCALLORAMOS_PRODUCT_IDENTITY.runtimeHomeDirectoryName),
 );
 
 const MODE_ARGS = {

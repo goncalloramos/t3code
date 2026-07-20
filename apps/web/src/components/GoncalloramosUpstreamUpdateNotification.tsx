@@ -12,14 +12,14 @@ import { useCallback, useEffect, useRef } from "react";
 
 import { APP_STAGE_LABEL } from "../branding";
 import {
-  buildCustomUpstreamAnalysisPrompt,
-  CUSTOM_UPSTREAM_REPOSITORY,
-  dismissCustomUpstreamRelease,
-  findCustomT3RepositoryProject,
-  isCustomUpstreamReleaseDismissed,
-  resolveNewCustomUpstreamRelease,
-  type CustomUpstreamRelease,
-} from "../customUpstreamUpdate";
+  buildGoncalloramosUpstreamAnalysisPrompt,
+  GONCALLORAMOS_UPSTREAM_REPOSITORY,
+  dismissGoncalloramosUpstreamRelease,
+  findGoncalloramosT3RepositoryProject,
+  isGoncalloramosUpstreamReleaseDismissed,
+  resolveNewGoncalloramosUpstreamRelease,
+  type GoncalloramosUpstreamRelease,
+} from "../goncalloramosUpstreamUpdate";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
 import { setActiveEnvironmentId, useProjects } from "../state/entities";
 import { threadEnvironment } from "../state/threads";
@@ -28,7 +28,7 @@ import { newMessageId, newThreadId } from "../lib/utils";
 import { waitForStartedServerThread } from "./ChatView.logic";
 import { stackedThreadToast, toastManager } from "./ui/toast";
 
-const RELEASE_ENDPOINT = `https://api.github.com/repos/${CUSTOM_UPSTREAM_REPOSITORY}/releases/latest`;
+const RELEASE_ENDPOINT = `https://api.github.com/repos/${GONCALLORAMOS_UPSTREAM_REPOSITORY}/releases/latest`;
 let releaseRequest: Promise<unknown> | null = null;
 
 function fetchLatestUpstreamRelease(): Promise<unknown> {
@@ -44,11 +44,11 @@ function fetchLatestUpstreamRelease(): Promise<unknown> {
 }
 
 /**
- * Custom builds watch official releases but never download or install them.
+ * Goncalloramos builds watch official releases but never download or install them.
  * Analysis runs in a Plan-mode Codex thread so implementation remains behind
  * the existing explicit plan approval action.
  */
-export function CustomUpstreamUpdateNotification() {
+export function GoncalloramosUpstreamUpdateNotification() {
   const navigate = useNavigate();
   const projects = useProjects();
   const desktopUpdateState = useDesktopUpdateState();
@@ -60,7 +60,7 @@ export function CustomUpstreamUpdateNotification() {
   const closeNotification = useCallback((releaseVersion?: string) => {
     dismissedRef.current = true;
     if (releaseVersion) {
-      dismissCustomUpstreamRelease(window.sessionStorage, releaseVersion);
+      dismissGoncalloramosUpstreamRelease(window.sessionStorage, releaseVersion);
     }
     const toastId = toastIdRef.current;
     if (toastId !== null) {
@@ -70,19 +70,19 @@ export function CustomUpstreamUpdateNotification() {
   }, []);
 
   const startAnalysis = useCallback(
-    async (release: CustomUpstreamRelease, currentVersion: string) => {
+    async (release: GoncalloramosUpstreamRelease, currentVersion: string) => {
       if (analysisStartedRef.current) return;
       analysisStartedRef.current = true;
 
-      const project = findCustomT3RepositoryProject(projects);
+      const project = findGoncalloramosT3RepositoryProject(projects);
       if (!project) {
         analysisStartedRef.current = false;
         toastManager.add(
           stackedThreadToast({
             type: "warning",
-            title: "Open the custom T3 repository first",
+            title: "Open the goncalloramos T3 repository first",
             description:
-              "Add or open the T3 Code Custom repository as a project, then run Analyse again.",
+              "Add or open the T3 Code - goncalloramos repository as a project, then run Analyse again.",
           }),
         );
         return;
@@ -113,7 +113,7 @@ export function CustomUpstreamUpdateNotification() {
           message: {
             messageId: newMessageId(),
             role: "user",
-            text: buildCustomUpstreamAnalysisPrompt({ currentVersion, release }),
+            text: buildGoncalloramosUpstreamAnalysisPrompt({ currentVersion, release }),
             attachments: [],
           },
           modelSelection,
@@ -165,7 +165,7 @@ export function CustomUpstreamUpdateNotification() {
 
   useEffect(() => {
     if (
-      APP_STAGE_LABEL !== "Custom" ||
+      APP_STAGE_LABEL !== "Stable" ||
       !window.desktopBridge ||
       !desktopUpdateState ||
       dismissedRef.current ||
@@ -179,8 +179,14 @@ export function CustomUpstreamUpdateNotification() {
     void fetchLatestUpstreamRelease()
       .then((value) => {
         if (cancelled || dismissedRef.current || analysisStartedRef.current) return;
-        const release = resolveNewCustomUpstreamRelease(desktopUpdateState.currentVersion, value);
-        if (!release || isCustomUpstreamReleaseDismissed(window.sessionStorage, release.version)) {
+        const release = resolveNewGoncalloramosUpstreamRelease(
+          desktopUpdateState.currentVersion,
+          value,
+        );
+        if (
+          !release ||
+          isGoncalloramosUpstreamReleaseDismissed(window.sessionStorage, release.version)
+        ) {
           return;
         }
 

@@ -134,6 +134,8 @@ export interface ThreadFeedProps {
   readonly contentInsetEndAdjustment: SharedValue<number>;
   readonly contentTopInset?: number;
   readonly contentBottomInset?: number;
+  /** Persistent list space reserved for controls pinned above the composer. */
+  readonly contentEndSpacer?: number;
   readonly contentMaxWidth?: number;
   readonly layoutVariant?: LayoutVariant;
   readonly usesAutomaticContentInsets?: boolean;
@@ -988,6 +990,7 @@ function renderFeedEntry(
       expandedRows={props.expandedWorkRows}
       iconSubtleColor={iconSubtleColor}
       onCopyRow={props.onCopyWorkRow}
+      onPressImage={props.onPressImage}
       onToggleRow={props.onToggleWorkRow}
     />
   );
@@ -1757,6 +1760,7 @@ export const ThreadFeed = memo(function ThreadFeed(props: ThreadFeedProps) {
             }
             contentContainerStyle={{
               paddingTop: 12,
+              paddingBottom: props.contentEndSpacer ?? 0,
               paddingHorizontal: contentHorizontalPadding,
             }}
           />

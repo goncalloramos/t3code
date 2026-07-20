@@ -1,3 +1,4 @@
+// oxlint-disable t3code/no-manual-effect-runtime-in-tests -- legacy projector tests predate the Effect test harness migration.
 import {
   CommandId,
   EventId,
@@ -203,6 +204,55 @@ describe("orchestration projector", () => {
       ),
     );
     expect(unarchived.threads[0]?.archivedAt).toBeNull();
+  });
+
+  it("applies thread.project-updated events", async () => {
+    const now = "2026-01-01T00:00:00.000Z";
+    const created = await Effect.runPromise(
+      projectEvent(
+        createEmptyReadModel(now),
+        makeEvent({
+          sequence: 1,
+          type: "thread.created",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: now,
+          commandId: "cmd-thread-create",
+          payload: {
+            threadId: "thread-1",
+            projectId: "project-source",
+            title: "demo",
+            modelSelection: { provider: "codex", model: "gpt-5.4" },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            createdAt: now,
+            updatedAt: now,
+          },
+        }),
+      ),
+    );
+    const moved = await Effect.runPromise(
+      projectEvent(
+        created,
+        makeEvent({
+          sequence: 2,
+          type: "thread.project-updated",
+          aggregateKind: "thread",
+          aggregateId: "thread-1",
+          occurredAt: now,
+          commandId: "cmd-thread-move",
+          payload: {
+            threadId: "thread-1",
+            projectId: "project-destination",
+            updatedAt: now,
+          },
+        }),
+      ),
+    );
+
+    expect(moved.threads[0]?.projectId).toBe("project-destination");
   });
 
   it("keeps projector forward-compatible for unhandled event types", async () => {

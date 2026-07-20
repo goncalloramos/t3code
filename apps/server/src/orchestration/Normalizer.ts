@@ -91,7 +91,8 @@ export const normalizeDispatchCommand = (command: ClientOrchestrationCommand) =>
     }
 
     if (
-      canonicalCommand.type === "project.meta.update" &&
+      (canonicalCommand.type === "project.meta.update" ||
+        canonicalCommand.type === "project.relocate") &&
       canonicalCommand.workspaceRoot !== undefined
     ) {
       return {

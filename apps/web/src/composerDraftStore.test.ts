@@ -697,6 +697,42 @@ describe("composerDraftStore project draft thread mapping", () => {
     resetComposerDraftStore();
   });
 
+  it("moves a source project draft to the merge destination without losing content", () => {
+    const store = useComposerDraftStore.getState();
+    store.setProjectDraftThreadId(projectRef, draftId, {
+      threadId,
+      branch: "draft-branch",
+      worktreePath: "/tmp/worktree",
+    });
+    store.setPrompt(draftId, "preserve this draft");
+
+    expect(store.relocateProjectDraft(projectRef, otherProjectRef)).toBe("moved");
+
+    const next = useComposerDraftStore.getState();
+    expect(next.getDraftThreadByProjectRef(projectRef)).toBeNull();
+    expect(next.getDraftThreadByProjectRef(otherProjectRef)).toMatchObject({
+      draftId,
+      projectId: otherProjectId,
+      branch: null,
+      worktreePath: null,
+    });
+    expect(next.getComposerDraft(draftId)?.prompt).toBe("preserve this draft");
+  });
+
+  it("blocks project draft relocation when both projects have drafts", () => {
+    const store = useComposerDraftStore.getState();
+    store.setProjectDraftThreadId(projectRef, draftId, { threadId });
+    store.setProjectDraftThreadId(otherProjectRef, otherDraftId, { threadId: otherThreadId });
+
+    expect(store.relocateProjectDraft(projectRef, otherProjectRef)).toBe("conflict");
+    expect(useComposerDraftStore.getState().getDraftThreadByProjectRef(projectRef)?.draftId).toBe(
+      draftId,
+    );
+    expect(
+      useComposerDraftStore.getState().getDraftThreadByProjectRef(otherProjectRef)?.draftId,
+    ).toBe(otherDraftId);
+  });
+
   it("clears composer data for one environment without touching another", () => {
     const store = useComposerDraftStore.getState();
     const localThreadRef = scopeThreadRef(TEST_ENVIRONMENT_ID, threadId);
