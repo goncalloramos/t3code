@@ -39,6 +39,7 @@ import { AddProjectDestinationRoute } from "./features/projects/AddProjectDestin
 import { AddProjectLocalRoute } from "./features/projects/AddProjectLocalRoute";
 import { AddProjectRepositoryRoute } from "./features/projects/AddProjectRepositoryRoute";
 import { AddProjectSourceRoute } from "./features/projects/AddProjectSourceRoute";
+import { ProjectRouteScreen } from "./features/projects/ProjectRouteScreen";
 import { NewTaskDraftRouteScreen } from "./features/threads/NewTaskDraftRouteScreen";
 import { NewTaskFlowProvider } from "./features/threads/new-task-flow-provider";
 import { NewTaskRouteScreen } from "./features/threads/NewTaskRouteScreen";
@@ -386,6 +387,14 @@ export const RootStack = createNativeStackNavigator({
       screen: ThreadRouteScreen,
       linking: THREAD_LINKING_PREFIX,
       options: GLASS_HEADER_OPTIONS,
+    }),
+    Project: createNativeStackScreen({
+      screen: ProjectRouteScreen,
+      linking: "projects/:environmentId/:projectId",
+      options: {
+        ...GLASS_HEADER_OPTIONS,
+        title: "Project",
+      },
     }),
     ThreadTerminal: createNativeStackScreen({
       screen: ThreadTerminalRouteScreen,

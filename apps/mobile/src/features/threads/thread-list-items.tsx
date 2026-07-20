@@ -89,6 +89,7 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
   readonly isFirst: boolean;
   readonly groupKey: string;
   readonly onGroupAction: (key: string, action: HomeGroupDisplayAction) => void;
+  readonly onSelectProject?: (project: EnvironmentProject) => void;
   /** Project a quick new thread should target; null hides the button. */
   readonly newThreadTarget?: EnvironmentProject | null;
   readonly onNewThread?: (project: EnvironmentProject) => void;
@@ -96,13 +97,20 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
   const iconMutedColor = useThemeColor("--color-icon-muted");
   const colorScheme = useColorScheme();
   const updateProject = useAtomCommand(projectEnvironment.update);
-  const { groupKey, onGroupAction, onNewThread } = props;
+  const { groupKey, onGroupAction, onNewThread, onSelectProject, project } = props;
   const newThreadTarget = props.newThreadTarget ?? null;
   const compact = props.variant === "compact";
   const handleToggle = useCallback(
     () => onGroupAction(groupKey, "toggle-collapsed"),
     [groupKey, onGroupAction],
   );
+  const handleSelectProject = useCallback(() => {
+    if (onSelectProject) {
+      onSelectProject(project);
+      return;
+    }
+    handleToggle();
+  }, [handleToggle, onSelectProject, project]);
   const handleNewThread = useCallback(() => {
     if (newThreadTarget) {
       onNewThread?.(newThreadTarget);
@@ -158,14 +166,20 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityState={{ expanded: !props.collapsed }}
+        accessibilityState={props.onSelectProject ? undefined : { expanded: !props.collapsed }}
         accessibilityLabel={`${props.title}, ${props.threadCount} threads`}
-        accessibilityHint={props.collapsed ? "Expands the project" : "Collapses the project"}
+        accessibilityHint={
+          props.onSelectProject
+            ? "Opens the project"
+            : props.collapsed
+              ? "Expands the project"
+              : "Collapses the project"
+        }
         className={
           compact ? "flex-1 flex-row items-center gap-2.5" : "flex-1 flex-row items-center gap-2"
         }
         hitSlop={{ ...verticalHitSlop, left: compact ? 20 : 12 }}
-        onPress={handleToggle}
+        onPress={handleSelectProject}
       >
         <ProjectFavicon
           environmentId={props.project.environmentId}
@@ -196,6 +210,28 @@ export const ThreadListGroupHeader = memo(function ThreadListGroupHeader(props: 
           {props.threadCount}
         </Text>
       </Pressable>
+      {props.onSelectProject ? (
+        <Pressable
+          accessibilityLabel={`${props.collapsed ? "Expand" : "Collapse"} ${props.title}`}
+          accessibilityRole="button"
+          hitSlop={{ ...verticalHitSlop, left: 10 }}
+          onPress={handleToggle}
+          style={({ pressed }) => ({
+            minHeight: 44,
+            minWidth: 44,
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: pressed ? 0.5 : 1,
+          })}
+        >
+          <SymbolView
+            name={props.collapsed ? "chevron.right" : "chevron.down"}
+            size={13}
+            tintColor={iconMutedColor}
+            type="monochrome"
+          />
+        </Pressable>
+      ) : null}
       {newThreadTarget ? (
         <ControlPillMenu
           actions={colorActions}

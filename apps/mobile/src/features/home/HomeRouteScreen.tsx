@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 
 import { NativeHeaderToolbar, NativeStackScreenOptions } from "../../native/StackHeader";
 import { renderCompactBrandTitle } from "../../components/CompactBrandTitle";
+import { currentUiGeneration } from "../../lib/currentUiGeneration";
 import { useProjects, useThreadShells } from "../../state/entities";
 import { usePendingNewTasks } from "../../state/use-pending-new-tasks";
 import { useWorkspaceState } from "../../state/workspace";
@@ -28,6 +29,7 @@ export function HomeRouteScreen() {
   const { state: catalogState } = useWorkspaceState();
   const { savedConnectionsById } = useSavedRemoteConnections();
   const navigation = useNavigation();
+  const nextUiEnabled = currentUiGeneration() === "next";
   const [searchQuery, setSearchQuery] = useState("");
   const { archiveThread, confirmDeleteThread } = useThreadListActions();
   const pendingTasks = usePendingNewTasks();
@@ -128,6 +130,16 @@ export function HomeRouteScreen() {
               threadId: thread.id,
             });
           }}
+          onSelectProject={
+            nextUiEnabled
+              ? (project) => {
+                  navigation.navigate("Project", {
+                    environmentId: project.environmentId,
+                    projectId: project.id,
+                  });
+                }
+              : undefined
+          }
           onSelectPendingTask={openPendingTask}
           onDeletePendingTask={confirmDeletePendingTask}
           onNewThreadInProject={(project) => {

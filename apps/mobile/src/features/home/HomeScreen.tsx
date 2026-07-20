@@ -71,6 +71,7 @@ interface HomeScreenProps {
   readonly onOpenSettings: () => void;
   readonly onStartNewTask: () => void;
   readonly onSelectThread: (thread: EnvironmentThreadShell) => void;
+  readonly onSelectProject?: (project: EnvironmentProject) => void;
   readonly onArchiveThread: (thread: EnvironmentThreadShell) => void;
   readonly onDeleteThread: (thread: EnvironmentThreadShell) => void;
   readonly onSelectPendingTask: (pendingTask: PendingNewTask) => void;
@@ -289,6 +290,7 @@ export function HomeScreen(props: HomeScreenProps) {
               newThreadTarget={item.group.newThreadTarget}
               onNewThread={props.onNewThreadInProject}
               project={item.group.representative}
+              onSelectProject={props.onSelectProject}
               threadCount={item.group.threads.length + item.group.pendingTasks.length}
               title={item.group.title}
             />
@@ -350,6 +352,7 @@ export function HomeScreen(props: HomeScreenProps) {
       props.onDeleteThread,
       props.onNewThreadInProject,
       props.onSelectPendingTask,
+      props.onSelectProject,
       props.onSelectThread,
       props.savedConnectionsById,
       updateGroupDisplay,
