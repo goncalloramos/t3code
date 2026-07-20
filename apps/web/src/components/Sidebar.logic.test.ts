@@ -12,6 +12,7 @@ import {
   isTrailingDoubleClick,
   orderItemsByPreferredIds,
   resolveProjectStatusIndicator,
+  resolveSidebarProjectHeaderAction,
   resolveSidebarNewThreadSeedContext,
   resolveSidebarNewThreadEnvMode,
   resolveSidebarStageBadgeLabel,
@@ -37,6 +38,16 @@ import {
 } from "../types";
 
 const localEnvironmentId = EnvironmentId.make("environment-local");
+
+describe("resolveSidebarProjectHeaderAction", () => {
+  it("keeps legacy headers as disclosure controls", () => {
+    expect(resolveSidebarProjectHeaderAction("legacy")).toBe("toggle");
+  });
+
+  it("opens project overviews from next-generation headers", () => {
+    expect(resolveSidebarProjectHeaderAction("next")).toBe("open-project");
+  });
+});
 
 describe("resolveSidebarStageBadgeLabel", () => {
   it("returns Nightly for nightly primary server versions", () => {
