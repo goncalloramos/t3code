@@ -44,6 +44,15 @@ const ContextMenuInput = Schema.Struct({
   position: Schema.optionalKey(ContextMenuPosition),
 });
 
+// Keep one system notification per thread. A thread can briefly move through
+// multiple projected states while its provider session settles; replacing the
+// prior alert prevents those state changes from filling Notification Center.
+const activeAgentNotifications = new Map<string, Electron.Notification>();
+
+function agentNotificationKey(input: typeof DesktopAgentNotificationSchema.Type): string {
+  return `${input.environmentId}:${input.threadId}`;
+}
+
 function toWebSocketBaseUrl(httpBaseUrl: URL): string {
   const url = new URL(httpBaseUrl.href);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
@@ -322,21 +331,39 @@ export const showAgentNotification = DesktopIpc.makeIpcMethod({
         return false;
       }
 
+      const window = Electron.BrowserWindow.getAllWindows().find(
+        (candidate) => !candidate.isDestroyed(),
+      );
+      // The in-app thread status is already visible while T3 Code is focused.
+      // Native alerts are for work that finishes while the user is elsewhere.
+      if (window?.isFocused()) {
+        return false;
+      }
+
+      const key = agentNotificationKey(input);
+      activeAgentNotifications.get(key)?.close();
+
       const notification = new Electron.Notification({
         title: input.title,
         body: input.body,
       });
+      activeAgentNotifications.set(key, notification);
+      notification.on("close", () => {
+        if (activeAgentNotifications.get(key) === notification) {
+          activeAgentNotifications.delete(key);
+        }
+      });
       notification.on("click", () => {
         try {
-          const window = Electron.BrowserWindow.getAllWindows().find(
+          const targetWindow = Electron.BrowserWindow.getAllWindows().find(
             (candidate) => !candidate.isDestroyed(),
           );
-          if (!window) return;
-          if (window.isMinimized()) window.restore();
-          if (!window.isVisible()) window.show();
+          if (!targetWindow) return;
+          if (targetWindow.isMinimized()) targetWindow.restore();
+          if (!targetWindow.isVisible()) targetWindow.show();
           Electron.app.focus({ steal: true });
-          window.focus();
-          window.webContents.send(IpcChannels.AGENT_NOTIFICATION_CLICK_CHANNEL, {
+          targetWindow.focus();
+          targetWindow.webContents.send(IpcChannels.AGENT_NOTIFICATION_CLICK_CHANNEL, {
             environmentId: input.environmentId,
             threadId: input.threadId,
           });
