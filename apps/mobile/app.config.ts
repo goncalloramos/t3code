@@ -357,6 +357,7 @@ const config: ExpoConfig = {
   ],
   extra: {
     appVariant: APP_VARIANT,
+    uiGeneration: repoEnv.EXPO_PUBLIC_T3CODE_UI_GENERATION ?? "legacy",
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,
