@@ -14,6 +14,7 @@ export type WorkspaceCommand =
   | {
       readonly _tag: "CreateProject";
       readonly environmentId: EnvironmentId;
+      readonly projectId: ProjectId;
       readonly title: string;
       readonly workspaceRoot: string;
     }
@@ -53,9 +54,16 @@ export const WorkspaceCommands = {
   }),
   createProject: (
     environmentId: EnvironmentId,
+    projectId: ProjectId,
     title: string,
     workspaceRoot: string,
-  ): WorkspaceCommand => ({ _tag: "CreateProject", environmentId, title, workspaceRoot }),
+  ): WorkspaceCommand => ({
+    _tag: "CreateProject",
+    environmentId,
+    projectId,
+    title,
+    workspaceRoot,
+  }),
   renameProject: (
     environmentId: EnvironmentId,
     projectId: ProjectId,
