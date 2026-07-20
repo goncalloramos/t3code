@@ -28,8 +28,6 @@ import {
   OrchestrationGetSnapshotError,
   OrchestrationGetTurnDiffError,
   ORCHESTRATION_WS_METHODS,
-  RelayClientInstallFailedError,
-  type RelayClientInstallProgressEvent,
   OrchestrationReplayEventsError,
   EnvironmentAuthorizationError,
   ThreadId,
@@ -97,6 +95,8 @@ import { makeSettingsRpcHandlers } from "./rpc/settings.ts";
 import { makeProviderRpcHandlers } from "./rpc/providers.ts";
 import { makeGitRpcHandlers, refreshGitStatus } from "./rpc/git.ts";
 import { makeVcsStatusRpcHandlers } from "./rpc/vcs.ts";
+import { makeSourceControlRpcHandlers } from "./rpc/sourceControl.ts";
+import { makeRelayRpcHandlers } from "./rpc/relay.ts";
 import * as RelayClient from "@t3tools/shared/relayClient";
 const isOrchestrationDispatchCommandError = Schema.is(OrchestrationDispatchCommandError);
 
@@ -1053,65 +1053,14 @@ const makeWsRpcLayer = (
             observeStreamEffect: observeRpcStreamEffect,
           },
         ),
-        [WS_METHODS.cloudGetRelayClientStatus]: (_input) =>
-          observeRpcEffect(WS_METHODS.cloudGetRelayClientStatus, relayClient.resolve, {
-            "rpc.aggregate": "cloud",
-          }),
-        [WS_METHODS.cloudInstallRelayClient]: (_input) =>
-          observeRpcStream(
-            WS_METHODS.cloudInstallRelayClient,
-            Stream.callback<RelayClientInstallProgressEvent, RelayClientInstallFailedError>(
-              (queue) =>
-                relayClient
-                  .installWithProgress((event) => Queue.offer(queue, event).pipe(Effect.asVoid))
-                  .pipe(
-                    Effect.flatMap((status) =>
-                      Queue.offer(queue, {
-                        type: "complete",
-                        status,
-                      }),
-                    ),
-                    Effect.catchTag("RelayClientInstallError", (error) =>
-                      Queue.fail(
-                        queue,
-                        new RelayClientInstallFailedError({
-                          reason: error.reason,
-                          message: error.message,
-                        }),
-                      ),
-                    ),
-                    Effect.andThen(Queue.end(queue)),
-                    Effect.forkScoped,
-                  ),
-            ),
-            { "rpc.aggregate": "cloud" },
-          ),
-        [WS_METHODS.sourceControlLookupRepository]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.sourceControlLookupRepository,
-            sourceControlRepositories.lookupRepository(input),
-            {
-              "rpc.aggregate": "source-control",
-            },
-          ),
-        [WS_METHODS.sourceControlCloneRepository]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.sourceControlCloneRepository,
-            sourceControlRepositories.cloneRepository(input),
-            {
-              "rpc.aggregate": "source-control",
-            },
-          ),
-        [WS_METHODS.sourceControlPublishRepository]: (input) =>
-          observeRpcEffect(
-            WS_METHODS.sourceControlPublishRepository,
-            sourceControlRepositories
-              .publishRepository(input)
-              .pipe(Effect.tap(() => refreshGitStatus(vcsStatusBroadcaster, input.cwd))),
-            {
-              "rpc.aggregate": "source-control",
-            },
-          ),
+        ...makeRelayRpcHandlers(relayClient, {
+          observeEffect: observeRpcEffect,
+          observeStream: observeRpcStream,
+        }),
+        ...makeSourceControlRpcHandlers(
+          { sourceControlRepositories, vcsStatusBroadcaster },
+          { observeEffect: observeRpcEffect },
+        ),
         ...makeProjectRpcHandlers(
           { workspaceEntries, workspaceFileSystem },
           { observeEffect: observeRpcEffect },
