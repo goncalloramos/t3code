@@ -1,4 +1,10 @@
-import type { EnvironmentId, ScopedProjectRef, ScopedThreadRef } from "@t3tools/contracts";
+import {
+  EnvironmentId,
+  ProjectId,
+  type EnvironmentId as EnvironmentIdType,
+  type ScopedProjectRef,
+  type ScopedThreadRef,
+} from "@t3tools/contracts";
 import * as Option from "effect/Option";
 import { AsyncResult, Atom } from "effect/unstable/reactivity";
 
@@ -31,9 +37,11 @@ import {
 export function createWorkspaceAtoms<E>(input: {
   readonly catalogValueAtom: Atom.Atom<EnvironmentCatalogState>;
   readonly connectionStateAtom: (
-    environmentId: EnvironmentId,
+    environmentId: EnvironmentIdType,
   ) => Atom.Atom<AsyncResult.AsyncResult<SupervisorConnectionState, E>>;
-  readonly shellStateValueAtom: (environmentId: EnvironmentId) => Atom.Atom<EnvironmentShellState>;
+  readonly shellStateValueAtom: (
+    environmentId: EnvironmentIdType,
+  ) => Atom.Atom<EnvironmentShellState>;
 }) {
   const selectionAtom = Atom.make<WorkspaceSelection>(EMPTY_WORKSPACE_SELECTION).pipe(
     Atom.keepAlive,
@@ -76,7 +84,29 @@ export function createWorkspaceAtoms<E>(input: {
         selectProjectThreads(get(workspaceAtom), ref.environmentId, ref.projectId),
     ).pipe(Atom.withLabel(`workspace:project-threads:${key}`));
   });
-  const connectionAtom = Atom.family((environmentId: EnvironmentId) =>
+  const projectThreadsForRefsByKeyAtom = Atom.family((key: string) => {
+    const projectKeys = new Set(
+      (JSON.parse(key) as ReadonlyArray<readonly [string, string]>).map(
+        ([environmentId, projectId]) =>
+          scopedProjectKey({
+            environmentId: EnvironmentId.make(environmentId),
+            projectId: ProjectId.make(projectId),
+          }),
+      ),
+    );
+    return Atom.make(
+      (get): ReadonlyArray<WorkspaceThread> =>
+        get(workspaceAtom).threads.filter((thread) =>
+          projectKeys.has(
+            scopedProjectKey({
+              environmentId: thread.environmentId,
+              projectId: thread.projectId,
+            }),
+          ),
+        ),
+    ).pipe(Atom.withLabel(`workspace:project-threads-collection:${key}`));
+  });
+  const connectionAtom = Atom.family((environmentId: EnvironmentIdType) =>
     Atom.make(
       (get): WorkspaceConnectionSummary | null =>
         get(workspaceAtom).connections.find(
@@ -109,6 +139,10 @@ export function createWorkspaceAtoms<E>(input: {
     projectAtom: (ref: ScopedProjectRef) => projectByKeyAtom(scopedProjectKey(ref)),
     threadAtom: (ref: ScopedThreadRef) => threadByKeyAtom(scopedThreadKey(ref)),
     projectThreadsAtom: (ref: ScopedProjectRef) => projectThreadsByKeyAtom(scopedProjectKey(ref)),
+    projectThreadsForRefsAtom: (refs: ReadonlyArray<ScopedProjectRef>) =>
+      projectThreadsForRefsByKeyAtom(
+        JSON.stringify(refs.map((ref) => [ref.environmentId, ref.projectId])),
+      ),
     connectionAtom,
     selectedProjectAtom,
     selectedThreadAtom,

@@ -8,6 +8,7 @@ import {
 } from "@t3tools/client-runtime/workspace";
 import type { EnvironmentId, ScopedProjectRef, ScopedThreadRef } from "@t3tools/contracts";
 import { Atom } from "effect/unstable/reactivity";
+import { appAtomRegistry } from "../rpc/atomRegistry";
 
 import { environmentCatalog } from "../connection/catalog";
 import { connectionAtomRuntime } from "../connection/runtime";
@@ -59,4 +60,22 @@ export function useWorkspaceConnection(
   return useAtomValue(
     environmentId === null ? EMPTY_CONNECTION_ATOM : workspaceAtoms.connectionAtom(environmentId),
   );
+}
+
+export function useWorkspaceProjects(): ReadonlyArray<WorkspaceProject> {
+  return useAtomValue(workspaceAtoms.workspaceAtom).projects;
+}
+
+export function useWorkspaceThreads(): ReadonlyArray<WorkspaceThread> {
+  return useAtomValue(workspaceAtoms.workspaceAtom).threads;
+}
+
+export function useWorkspaceThreadsForProjectRefs(
+  refs: ReadonlyArray<ScopedProjectRef>,
+): ReadonlyArray<WorkspaceThread> {
+  return useAtomValue(workspaceAtoms.projectThreadsForRefsAtom(refs));
+}
+
+export function readWorkspaceThread(ref: ScopedThreadRef): WorkspaceThread | null {
+  return appAtomRegistry.get(workspaceAtoms.threadAtom(ref));
 }

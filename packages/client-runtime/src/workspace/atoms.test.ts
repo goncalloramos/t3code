@@ -128,6 +128,14 @@ describe("workspace atoms", () => {
     expect(
       registry.get(atoms.threadAtom({ environmentId: remoteId, threadId }))?.environmentId,
     ).toBe(remoteId);
+    expect(atoms.projectThreadsForRefsAtom([localRef, remoteRef])).toBe(
+      atoms.projectThreadsForRefsAtom([equivalentLocalRef, remoteRef]),
+    );
+    expect(
+      registry
+        .get(atoms.projectThreadsForRefsAtom([localRef, remoteRef]))
+        .map((thread) => thread.environmentId),
+    ).toEqual([localId, remoteId]);
   });
 
   it("normalizes writable selection through the shared read model", () => {

@@ -84,14 +84,7 @@ import { APP_BASE_NAME, APP_STAGE_LABEL } from "../branding";
 import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isMacPlatform } from "../lib/utils";
-import {
-  readThreadShell,
-  useProject,
-  useProjects,
-  useServerConfigs,
-  useThreadShells,
-  useThreadShellsForProjectRefs,
-} from "../state/entities";
+import { useServerConfigs } from "../state/entities";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
 import { useThreadDiscoveredPorts } from "../portDiscoveryState";
@@ -117,6 +110,13 @@ import { readLocalApi } from "../localApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
 import { useDesktopUpdateState } from "../state/desktopUpdate";
+import {
+  readWorkspaceThread,
+  useWorkspaceProject,
+  useWorkspaceProjects,
+  useWorkspaceThreads,
+  useWorkspaceThreadsForProjectRefs,
+} from "../state/workspace";
 
 import { useThreadActions } from "../hooks/useThreadActions";
 import { projectEnvironment } from "../state/projects";
@@ -422,7 +422,7 @@ export const SidebarThreadRow = memo(function SidebarThreadRow(props: SidebarThr
   // For grouped projects, the thread may belong to a different environment
   // than the representative project.  Look up the thread's own project cwd
   // so git status (and thus PR detection) queries the correct path.
-  const threadProject = useProject(
+  const threadProject = useWorkspaceProject(
     useMemo(
       () => scopeProjectRef(thread.environmentId, thread.projectId),
       [thread.environmentId, thread.projectId],
@@ -1132,7 +1132,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     reportFailure: false,
   });
   const updateSettings = useUpdateClientSettings();
-  const allProjects = useProjects();
+  const allProjects = useWorkspaceProjects();
   const primaryEnvironmentId = usePrimaryEnvironmentId();
   const sidebarThreadPreviewCount = useClientSettings<SidebarThreadPreviewCount>(
     (settings) => settings.sidebarThreadPreviewCount,
@@ -1189,7 +1189,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     },
   });
   const openPrLink = useOpenPrLink();
-  const sidebarThreads = useThreadShellsForProjectRefs(project.memberProjectRefs);
+  const sidebarThreads = useWorkspaceThreadsForProjectRefs(project.memberProjectRefs);
   const sidebarThreadByKey = useMemo(
     () =>
       new Map(
@@ -1889,7 +1889,7 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       const currentRouteTarget = resolveThreadRouteTarget(currentRouteParams);
       const currentActiveThread =
         currentRouteTarget?.kind === "server"
-          ? readThreadShell(currentRouteTarget.threadRef)
+          ? readWorkspaceThread(currentRouteTarget.threadRef)
           : null;
       const draftStore = useComposerDraftStore.getState();
       const currentActiveDraftThread =
@@ -3402,8 +3402,8 @@ const SidebarProjectsContent = memo(function SidebarProjectsContent(
 });
 
 export default function Sidebar() {
-  const projects = useProjects();
-  const sidebarThreads = useThreadShells();
+  const projects = useWorkspaceProjects();
+  const sidebarThreads = useWorkspaceThreads();
   const projectExpandedById = useUiStateStore((store) => store.projectExpandedById);
   const projectOrder = useUiStateStore((store) => store.projectOrder);
   const reorderProjects = useUiStateStore((store) => store.reorderProjects);
