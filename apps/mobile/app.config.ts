@@ -131,6 +131,7 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 }
 
 const variant = VARIANT_CONFIG[APP_VARIANT];
+const appVersion = isGoncalloramosBuild ? "0.28.2" : "0.1.0";
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
   : variant.iosBundleIdentifier;
@@ -194,11 +195,11 @@ const config: ExpoConfig = {
   slug: "t3-code",
   platforms: ["ios", "android"],
   scheme: variant.scheme,
-  version: "0.1.0",
+  version: appVersion,
   runtimeVersion: {
     // Fingerprint (not appVersion) so an OTA only reaches binaries whose native
     // project — native deps, config plugins, AND patches/ — matches the update.
-    // With appVersion, every 0.1.0 build shares a runtime version, so a JS update
+    // With appVersion, every build sharing a marketing version also shares a runtime version, so a JS update
     // could land on a binary missing the native changes it needs and crash.
     policy: process.env.MOBILE_VERSION_POLICY ?? "fingerprint",
   },

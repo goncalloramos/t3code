@@ -58,6 +58,11 @@ import {
   scopeThreadRef,
 } from "@t3tools/client-runtime/environment";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
+import {
+  colorWithAlpha,
+  projectColorHex,
+  resolveProjectColor,
+} from "@t3tools/shared/projectColors";
 import { findProjectByPath } from "@t3tools/client-runtime/state/projects";
 import {
   isAtomCommandInterrupted,
@@ -205,6 +210,7 @@ import { sortThreads } from "../lib/threadSort";
 import { SidebarUpdatePill } from "./sidebar/SidebarUpdatePill";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { useIsMobile } from "~/hooks/useMediaQuery";
+import { useTheme } from "~/hooks/useTheme";
 import { CommandDialogTrigger } from "./ui/command";
 import { useClientSettings, useUpdateClientSettings } from "~/hooks/useSettings";
 import { primaryServerConfigAtom, primaryServerKeybindingsAtom } from "../state/server";
@@ -1132,8 +1138,10 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     (settings) => settings.sidebarThreadPreviewCount,
   );
   const router = useRouter();
+  const { resolvedTheme } = useTheme();
   const { isMobile, setOpenMobile } = useSidebar();
   const markThreadUnread = useUiStateStore((state) => state.markThreadUnread);
+  const projectColor = projectColorHex(resolveProjectColor(project), resolvedTheme === "dark");
   const setProjectExpanded = useUiStateStore((state) => state.setProjectExpanded);
   const toggleThreadSelection = useThreadSelectionStore((state) => state.toggleThread);
   const rangeSelectTo = useThreadSelectionStore((state) => state.rangeSelectTo);
@@ -2394,7 +2402,13 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
 
   return (
     <>
-      <div className="group/project-header relative">
+      <div
+        className="group/project-header relative rounded-md border-l-[3px]"
+        style={{
+          backgroundColor: colorWithAlpha(projectColor, resolvedTheme === "dark" ? 0.1 : 0.07),
+          borderLeftColor: projectColor,
+        }}
+      >
         <SidebarMenuButton
           ref={isManualProjectSorting ? dragHandleProps?.setActivatorNodeRef : undefined}
           size="sm"
