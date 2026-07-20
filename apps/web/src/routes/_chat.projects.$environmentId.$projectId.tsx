@@ -1,5 +1,5 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
-import { workspaceAgentState } from "@t3tools/client-runtime/workspace";
+import { WorkspaceCommands, workspaceAgentState } from "@t3tools/client-runtime/workspace";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import {
@@ -12,20 +12,23 @@ import {
   PlusIcon,
   WifiOffIcon,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "../components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../components/ui/empty";
 import { SidebarInset } from "../components/ui/sidebar";
 import { useNewThreadHandler } from "../hooks/useHandleNewThread";
-import { useEnvironment } from "../state/environments";
+import { useAllEnvironmentShellsBootstrapped } from "../state/entities";
 import {
-  useAllEnvironmentShellsBootstrapped,
-  useProject,
-  useThreadShells,
-} from "../state/entities";
+  useWorkspaceConnection,
+  useWorkspaceProject,
+  useWorkspaceProjectThreads,
+  workspaceCommands,
+} from "../state/workspace";
+import { appAtomRegistry } from "../rpc/atomRegistry";
 import { cn } from "../lib/utils";
 import { currentUiGeneration } from "../lib/uiGeneration";
+import { isWorkspaceProjectRouteResolved } from "../workspaceProjectRoute";
 
 function statusPresentation(thread: Parameters<typeof workspaceAgentState>[0]) {
   const state = workspaceAgentState(thread);
@@ -60,31 +63,32 @@ function ProjectOverviewRouteView() {
   const environmentId = params.environmentId as EnvironmentId;
   const projectId = params.projectId as ProjectId;
   const projectRef = scopeProjectRef(environmentId, projectId);
-  const project = useProject(projectRef);
-  const environment = useEnvironment(environmentId);
-  const allThreads = useThreadShells();
+  const project = useWorkspaceProject(projectRef);
+  const connection = useWorkspaceConnection(environmentId);
+  const projectThreads = useWorkspaceProjectThreads(projectRef);
   const bootstrapped = useAllEnvironmentShellsBootstrapped();
   const handleNewThread = useNewThreadHandler();
   const navigate = useNavigate();
   const [creating, setCreating] = useState(false);
-  const projectThreads = useMemo(
-    () =>
-      allThreads
-        .filter(
-          (thread) => thread.environmentId === environmentId && thread.projectId === projectId,
-        )
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
-    [allThreads, environmentId, projectId],
-  );
+  const workspaceResolved = isWorkspaceProjectRouteResolved(connection);
 
   useEffect(() => {
-    if (bootstrapped && project === null) void navigate({ to: "/", replace: true });
-  }, [bootstrapped, navigate, project]);
+    void workspaceCommands.run(
+      appAtomRegistry,
+      WorkspaceCommands.selectProject(environmentId, projectId),
+    );
+  }, [environmentId, projectId]);
 
-  if (!bootstrapped || project === null) return null;
+  useEffect(() => {
+    if (bootstrapped && workspaceResolved && project === null) {
+      void navigate({ to: "/", replace: true });
+    }
+  }, [bootstrapped, navigate, project, workspaceResolved]);
 
-  const connectionPhase = environment?.connection.phase ?? "available";
-  const disconnected = connectionPhase !== "connected";
+  if (!bootstrapped || !workspaceResolved || project === null) return null;
+
+  const connectionPhase = connection?.phase ?? "available";
+  const disconnected = connectionPhase !== "live";
   const startThread = async () => {
     if (creating) return;
     setCreating(true);
@@ -102,8 +106,8 @@ function ProjectOverviewRouteView() {
           <div className="mb-5 flex items-center gap-2 rounded-xl border border-amber-500/30 bg-amber-500/8 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
             <WifiOffIcon className="size-4 shrink-0" />
             {connectionPhase === "reconnecting"
-              ? `Reconnecting to ${environment?.label ?? "environment"}. Project history may be stale.`
-              : `${environment?.label ?? "Environment"} is ${connectionPhase}. Cached project history remains available.`}
+              ? `Reconnecting to ${connection?.label ?? "environment"}. Project history may be stale.`
+              : `${connection?.label ?? "Environment"} is ${connectionPhase}. Cached project history remains available.`}
           </div>
         ) : null}
 
@@ -111,7 +115,7 @@ function ProjectOverviewRouteView() {
           <div className="min-w-0">
             <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
               <FolderGit2Icon className="size-4" />
-              <span>{environment?.label ?? environmentId}</span>
+              <span>{connection?.label ?? environmentId}</span>
               <span aria-hidden="true">·</span>
               <span className="truncate font-mono">{project.workspaceRoot}</span>
             </div>
