@@ -131,7 +131,7 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 }
 
 const variant = VARIANT_CONFIG[APP_VARIANT];
-const appVersion = isGoncalloramosBuild ? "0.28.2" : "0.1.0";
+const appVersion = isGoncalloramosBuild ? "0.28.3" : "0.1.0";
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
   : variant.iosBundleIdentifier;

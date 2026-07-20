@@ -1073,6 +1073,7 @@ export interface DesktopBridge {
     position?: { x: number; y: number },
   ) => Promise<T | null>;
   openExternal: (url: string) => Promise<boolean>;
+  openPermissionSettings: (target: DesktopPermissionSettingsTarget) => Promise<boolean>;
   showAgentNotification: (notification: DesktopAgentNotification) => Promise<boolean>;
   onAgentNotificationClick: (
     listener: (target: Pick<DesktopAgentNotification, "environmentId" | "threadId">) => void,
@@ -1092,6 +1093,18 @@ export interface DesktopBridge {
    */
   preview?: DesktopPreviewBridge;
 }
+
+export const DesktopPermissionSettingsTargetSchema = Schema.Literals([
+  "notifications",
+  "keychain",
+  "files-and-folders",
+  "full-disk-access",
+  "accessibility",
+  "screen-recording",
+  "microphone",
+  "camera",
+]);
+export type DesktopPermissionSettingsTarget = typeof DesktopPermissionSettingsTargetSchema.Type;
 
 export interface DesktopPreviewBridge {
   createTab: (tabId: string) => Promise<void>;

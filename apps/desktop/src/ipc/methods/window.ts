@@ -3,6 +3,7 @@ import {
   DesktopAgentNotificationSchema,
   DesktopAppBrandingSchema,
   DesktopEnvironmentBootstrapSchema,
+  DesktopPermissionSettingsTargetSchema,
   DesktopThemeSchema,
   PickFolderOptionsSchema,
   PRIMARY_LOCAL_ENVIRONMENT_ID,
@@ -12,6 +13,7 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Electron from "electron";
+import { HostProcessPlatform } from "@t3tools/shared/hostProcess";
 
 import * as DesktopBackendPool from "../../backend/DesktopBackendPool.ts";
 import * as DesktopLocalEnvironmentAuth from "../../backend/DesktopLocalEnvironmentAuth.ts";
@@ -268,6 +270,45 @@ export const openExternal = DesktopIpc.makeIpcMethod({
   handler: Effect.fn("desktop.ipc.window.openExternal")(function* (url) {
     const shell = yield* ElectronShell.ElectronShell;
     return yield* shell.openExternal(url);
+  }),
+});
+
+const MACOS_PERMISSION_SETTINGS_URLS = {
+  notifications:
+    "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=com.goncalloramos.t3code",
+  "files-and-folders":
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_FilesAndFolders",
+  "full-disk-access": "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+  accessibility: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility",
+  "screen-recording":
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
+  microphone: "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone",
+  camera: "x-apple.systempreferences:com.apple.preference.security?Privacy_Camera",
+} as const;
+
+export const openPermissionSettings = DesktopIpc.makeIpcMethod({
+  channel: IpcChannels.OPEN_PERMISSION_SETTINGS_CHANNEL,
+  payload: DesktopPermissionSettingsTargetSchema,
+  result: Schema.Boolean,
+  handler: Effect.fn("desktop.ipc.window.openPermissionSettings")(function* (target) {
+    const platform = yield* HostProcessPlatform;
+    if (platform !== "darwin") {
+      return false;
+    }
+
+    if (target === "keychain") {
+      const error = yield* Effect.promise(() =>
+        Electron.shell.openPath("/System/Applications/Utilities/Keychain Access.app"),
+      );
+      return error.length === 0;
+    }
+
+    return yield* Effect.promise(() =>
+      Electron.shell.openExternal(MACOS_PERMISSION_SETTINGS_URLS[target]).then(
+        () => true,
+        () => false,
+      ),
+    );
   }),
 });
 

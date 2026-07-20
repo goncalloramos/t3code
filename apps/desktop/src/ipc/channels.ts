@@ -3,6 +3,7 @@ export const CONFIRM_CHANNEL = "desktop:confirm";
 export const SET_THEME_CHANNEL = "desktop:set-theme";
 export const CONTEXT_MENU_CHANNEL = "desktop:context-menu";
 export const OPEN_EXTERNAL_CHANNEL = "desktop:open-external";
+export const OPEN_PERMISSION_SETTINGS_CHANNEL = "desktop:open-permission-settings";
 export const SHOW_AGENT_NOTIFICATION_CHANNEL = "desktop:show-agent-notification";
 export const AGENT_NOTIFICATION_CLICK_CHANNEL = "desktop:agent-notification-click";
 export const MENU_ACTION_CHANNEL = "desktop:menu-action";

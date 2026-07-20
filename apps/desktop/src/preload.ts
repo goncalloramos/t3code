@@ -109,6 +109,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
       ...(position === undefined ? {} : { position }),
     }),
   openExternal: (url: string) => ipcRenderer.invoke(IpcChannels.OPEN_EXTERNAL_CHANNEL, url),
+  openPermissionSettings: (target) =>
+    ipcRenderer.invoke(IpcChannels.OPEN_PERMISSION_SETTINGS_CHANNEL, target),
   showAgentNotification: (notification) =>
     ipcRenderer.invoke(IpcChannels.SHOW_AGENT_NOTIFICATION_CHANNEL, notification),
   onAgentNotificationClick: (listener) => {
