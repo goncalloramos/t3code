@@ -71,6 +71,10 @@ different products:
 At the time this section was introduced, custom `main` was created by merge commit `ffb975619` from
 official base `1735e27d9`. Do not assume those hashes remain current; always calculate the merge base.
 
+The published 0.29 release baseline was created on 21 July 2026 as version `0.29.0` at commit
+`8d71f92be4c67a9e2be508cd184ede1097bedd23`. Treat this as historical orientation rather than a
+permanent branch pointer; always inspect `origin/main` before maintenance work.
+
 ### Custom behavior that must survive an upstream update
 
 1. Native Codex quota UI
@@ -116,10 +120,31 @@ official base `1735e27d9`. Do not assume those hashes remain current; always cal
 6. Private mobile and Remote Mode
    - Mobile variant `goncalloramos` uses bundle ID `com.goncalloramos.t3code.mobile`, scheme
      `t3code-goncalloramos`, private signing from `T3CODE_APPLE_TEAM_ID`, and no Expo OTA updates.
+   - The private mobile version is derived from `apps/desktop/package.json`; desktop, server, web,
+     contracts, and mobile release versions must remain aligned.
    - Desktop Remote Mode keeps the backend on loopback and uses Tailscale Serve HTTPS on port 443.
      It must never enable Funnel or require LAN-wide `0.0.0.0` binding.
+   - Remote Mode and desktop Network Access are mutually exclusive. Enabling Remote Mode must force
+     local-only exposure. Enabling Network Access while Remote Mode is active must show an explicit
+     confirmation, disable Remote Mode before widening exposure, and request only one relaunch.
    - Remote Mode owns scoped sleep/login resources and reuses the provider-neutral pairing,
      authorization, WebSocket, approvals, terminal, file, diff, and outbox protocols.
+7. Unconditional 0.29 project navigation
+   - The `legacy` / `next` UI-generation environment switch was removed from shared public config,
+     Vite, Expo, web, and mobile. Do not reintroduce a release-time shell split.
+   - Project headers open the project overview unconditionally on web and mobile. The dedicated
+     disclosure control remains responsible for expanding or collapsing project threads.
+   - The project overview route must remain directly accessible without a legacy redirect.
+8. Bounded stale-thread recovery
+   - Expected subscription failures may retry only when explicitly configured and must support a
+     finite retry limit. Thread snapshot retries are bounded so deleted or permanently missing
+     threads cannot create an endless reconnect loop.
+   - A missing-thread snapshot marks the thread deleted, removes stale cached data, and does not
+     retry. Mobile selection must not reconstruct a missing thread from cached detail after a
+     deleted or failed detail state.
+   - Primary files are `packages/client-runtime/src/rpc/client.ts`,
+     `packages/client-runtime/src/state/threads.ts`, and
+     `apps/mobile/src/state/use-thread-selection.ts`; preserve their regression tests.
 
 The original logical custom commits are useful during audits:
 
