@@ -116,7 +116,6 @@ import { isCommandPaletteOpen } from "../commandPaletteContext";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { RIGHT_PANEL_INLINE_LAYOUT_MEDIA_QUERY } from "../rightPanelLayout";
-import { currentUiGeneration, shouldRestoreWorkspaceInspectorFocus } from "../lib/uiGeneration";
 import {
   selectActiveRightPanel,
   selectActiveRightPanelSurface,
@@ -5574,7 +5573,7 @@ function ChatViewContent(props: ChatViewProps) {
         <RightPanelSheet
           open
           onClose={planSidebarOpen ? closePlanSidebar : closePreviewPanel}
-          restoreFocusToPrimaryWorkspace={shouldRestoreWorkspaceInspectorFocus(currentUiGeneration)}
+          restoreFocusToPrimaryWorkspace
         >
           <RightPanelTabs
             mode="sheet"

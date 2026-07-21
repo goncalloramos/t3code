@@ -3,6 +3,7 @@ import { assert, describe, it } from "@effect/vitest";
 
 import {
   resolveDesktopRemoteModeState,
+  resolveRemoteModeExposureMode,
   resolveRemoteModeLoginItemAction,
 } from "./DesktopRemoteAccess.ts";
 
@@ -29,6 +30,12 @@ const tailscaleEndpoint = (status: "available" | "unavailable") =>
   });
 
 describe("DesktopRemoteAccess", () => {
+  it("keeps Remote Mode on loopback without widening a disabled configuration", () => {
+    assert.equal(resolveRemoteModeExposureMode(true, "network-accessible"), "local-only");
+    assert.equal(resolveRemoteModeExposureMode(true, "local-only"), "local-only");
+    assert.equal(resolveRemoteModeExposureMode(false, "network-accessible"), "network-accessible");
+  });
+
   it("stays off without exposing an endpoint when disabled", () => {
     const state = resolveDesktopRemoteModeState({
       preferences: { ...preferences, enabled: false },

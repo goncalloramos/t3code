@@ -96,7 +96,11 @@ const ACTIVE_THREAD: OrchestrationThread = {
   },
 };
 
-type TestThreadInput = OrchestrationThreadStreamItem | Error;
+type TestThreadInput = OrchestrationThreadStreamItem | Error | { readonly message: string };
+
+function isThreadStreamItem(input: TestThreadInput): input is OrchestrationThreadStreamItem {
+  return "kind" in input;
+}
 
 function testSession(client: WsRpcProtocolClient): RpcSession.RpcSession {
   return {
@@ -138,7 +142,7 @@ const makeHarness = Effect.fn("TestEnvironmentThreads.makeHarness")(function* (o
   const streamFrom = (queue: Queue.Queue<TestThreadInput>) =>
     Stream.fromQueue(queue).pipe(
       Stream.mapEffect((input) =>
-        input instanceof Error ? Effect.fail(input) : Effect.succeed(input),
+        isThreadStreamItem(input) ? Effect.succeed(input) : Effect.fail(input),
       ),
     );
   const client = {
@@ -492,6 +496,31 @@ describe("EnvironmentThreads", () => {
 
       expect(Option.isNone(recovered.error)).toBe(true);
       expect(yield* Ref.get(harness.subscriptionCount)).toBe(2);
+      expect(yield* Ref.get(harness.retryCount)).toBe(0);
+    }),
+  );
+
+  it.effect("removes stale cached data and does not retry when the thread is missing", () =>
+    Effect.gen(function* () {
+      const harness = yield* makeHarness({ cached: BASE_THREAD });
+      yield* Queue.offer(harness.inputs, {
+        message: `Thread ${THREAD_ID} was not found`,
+      });
+
+      const state = yield* awaitThreadState(
+        harness.observed,
+        (value) => value.status === "deleted",
+      );
+      expect(Option.isNone(state.data)).toBe(true);
+      expect(Option.isNone(state.error)).toBe(true);
+      expect(yield* Ref.get(harness.removedThreads)).toEqual([THREAD_ID]);
+
+      yield* TestClock.adjust("1 second");
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        yield* Effect.yieldNow;
+      }
+
+      expect(yield* Ref.get(harness.subscriptionCount)).toBe(1);
       expect(yield* Ref.get(harness.retryCount)).toBe(0);
     }),
   );

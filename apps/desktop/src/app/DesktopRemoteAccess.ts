@@ -1,5 +1,6 @@
 import type {
   AdvertisedEndpoint,
+  DesktopServerExposureMode,
   DesktopRemoteModePreferences,
   DesktopRemoteModeState,
 } from "@t3tools/contracts";
@@ -46,6 +47,11 @@ const toPreferences = (
   preventSystemSleep: settings.remoteModePreventSystemSleep,
   launchAtLogin: settings.remoteModeLaunchAtLogin,
 });
+
+export const resolveRemoteModeExposureMode = (
+  enabled: boolean,
+  currentMode: DesktopServerExposureMode,
+): DesktopServerExposureMode => (enabled ? "local-only" : currentMode);
 
 export const resolveDesktopRemoteModeState = (input: {
   readonly preferences: DesktopRemoteModePreferences;
@@ -109,6 +115,21 @@ export const make = Effect.gen(function* () {
   const electronApp = yield* ElectronApp.ElectronApp;
   const hostAwake = yield* DesktopHostAwake.DesktopHostAwake;
 
+  const enforceLoopbackExposure = Effect.fn("desktop.remoteAccess.enforceLoopbackExposure")(
+    function* (enabled: boolean) {
+      const currentSettings = yield* settings.get;
+      const requiredMode = resolveRemoteModeExposureMode(
+        enabled,
+        currentSettings.serverExposureMode,
+      );
+      if (requiredMode === currentSettings.serverExposureMode) {
+        return false;
+      }
+      const change = yield* exposure.setMode(requiredMode);
+      return change.requiresRelaunch;
+    },
+  );
+
   const applyRuntimePreferences = Effect.fn("desktop.remoteAccess.applyRuntimePreferences")(
     function* (preferences: DesktopRemoteModePreferences) {
       const shouldPreventSleep = preferences.enabled && preferences.preventSystemSleep;
@@ -163,6 +184,7 @@ export const make = Effect.gen(function* () {
       const currentSettings = yield* settings.get;
       const preferences = toPreferences(currentSettings);
       yield* applyRuntimePreferences(preferences);
+      yield* enforceLoopbackExposure(preferences.enabled);
       if (currentSettings.tailscaleServeEnabled !== preferences.enabled) {
         yield* settings.setTailscaleServe({ enabled: preferences.enabled, port: Option.none() });
       }
@@ -174,18 +196,18 @@ export const make = Effect.gen(function* () {
   const setPreferences = Effect.fn("desktop.remoteAccess.setPreferences")(
     function* (preferences: DesktopRemoteModePreferences) {
       const preferenceChange = yield* settings.setRemoteModePreferences(preferences);
+      const exposureRequiresRelaunch = yield* enforceLoopbackExposure(preferences.enabled);
       const tailscaleChange = yield* settings.setTailscaleServe({
         enabled: preferences.enabled,
         port: Option.none(),
       });
       yield* applyRuntimePreferences(preferences);
       const state = yield* readState();
+      const requiresRelaunch =
+        preferenceChange.changed || tailscaleChange.changed || exposureRequiresRelaunch;
       return {
-        state:
-          preferenceChange.changed || tailscaleChange.changed
-            ? { ...state, status: "restart-required" as const }
-            : state,
-        requiresRelaunch: preferenceChange.changed || tailscaleChange.changed,
+        state: requiresRelaunch ? { ...state, status: "restart-required" as const } : state,
+        requiresRelaunch,
       };
     },
     Effect.mapError((cause) => new DesktopRemoteAccessError({ operation: "persist", cause })),

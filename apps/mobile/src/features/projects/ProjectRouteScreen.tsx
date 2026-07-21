@@ -15,8 +15,6 @@ import {
   useWorkspaceProjectThreads,
 } from "../../state/workspace";
 import { relativeTime } from "../../lib/time";
-import { currentUiGeneration } from "../../lib/currentUiGeneration";
-import { supportsProjectOverviewNavigation } from "../../lib/uiGeneration";
 
 type ProjectRouteParams = {
   readonly environmentId: string;
@@ -42,7 +40,7 @@ function agentStatus(thread: Parameters<typeof workspaceAgentState>[0]) {
   }
 }
 
-function NextProjectRouteScreen({ route }: StaticScreenProps<ProjectRouteParams>) {
+export function ProjectRouteScreen({ route }: StaticScreenProps<ProjectRouteParams>) {
   const navigation = useNavigation();
   const environmentId = route.params.environmentId as EnvironmentId;
   const projectId = route.params.projectId as ProjectId;
@@ -190,15 +188,4 @@ function NextProjectRouteScreen({ route }: StaticScreenProps<ProjectRouteParams>
       )}
     </ScrollView>
   );
-}
-
-export function ProjectRouteScreen(props: StaticScreenProps<ProjectRouteParams>) {
-  const navigation = useNavigation();
-  const projectOverviewNavigationEnabled = supportsProjectOverviewNavigation(currentUiGeneration());
-
-  useEffect(() => {
-    if (!projectOverviewNavigationEnabled) navigation.navigate("Home");
-  }, [navigation, projectOverviewNavigationEnabled]);
-
-  return projectOverviewNavigationEnabled ? <NextProjectRouteScreen {...props} /> : null;
 }

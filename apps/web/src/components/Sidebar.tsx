@@ -85,7 +85,6 @@ import { APP_BASE_NAME, APP_STAGE_LABEL } from "../branding";
 import { useOpenPrLink } from "../lib/openPullRequestLink";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { isMacPlatform } from "../lib/utils";
-import { currentUiGeneration } from "../lib/uiGeneration";
 import { useServerConfigs } from "../state/entities";
 import { selectThreadTerminalUiState, useTerminalUiStateStore } from "../terminalUiStateStore";
 import { useThreadRunningTerminalIds } from "../state/terminalSessions";
@@ -198,7 +197,6 @@ import {
   isContextMenuPointerDown,
   isTrailingDoubleClick,
   resolveProjectStatusIndicator,
-  resolveSidebarProjectHeaderAction,
   resolveSidebarNewThreadSeedContext,
   resolveSidebarNewThreadEnvMode,
   resolveSidebarStageBadgeLabel,
@@ -1142,7 +1140,6 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     (settings) => settings.sidebarThreadPreviewCount,
   );
   const router = useRouter();
-  const projectHeaderAction = resolveSidebarProjectHeaderAction(currentUiGeneration);
   const { resolvedTheme } = useTheme();
   const { isMobile, setOpenMobile } = useSidebar();
   const markThreadUnread = useUiStateStore((state) => state.markThreadUnread);
@@ -1285,39 +1282,18 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
     return counts;
   }, [memberProjectByScopedKey, project.memberProjects, projectThreads]);
 
-  const { projectStatus, visibleProjectThreads, orderedProjectThreadKeys } = useMemo(() => {
-    const lastVisitedAtByThreadKey = new Map(
-      projectThreads.map((thread, index) => [
-        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-        threadLastVisitedAts[index] ?? null,
-      ]),
-    );
-    const resolveProjectThreadStatus = (thread: SidebarThreadSummary) => {
-      const lastVisitedAt = lastVisitedAtByThreadKey.get(
-        scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
-      );
-      return resolveThreadStatusPill({
-        thread: {
-          ...thread,
-          ...(lastVisitedAt !== null && lastVisitedAt !== undefined ? { lastVisitedAt } : {}),
-        },
-      });
-    };
+  const { visibleProjectThreads, orderedProjectThreadKeys } = useMemo(() => {
     const visibleProjectThreads = sortThreads(
       projectThreads.filter((thread) => thread.archivedAt === null),
       threadSortOrder,
-    );
-    const projectStatus = resolveProjectStatusIndicator(
-      visibleProjectThreads.map((thread) => resolveProjectThreadStatus(thread)),
     );
     return {
       orderedProjectThreadKeys: visibleProjectThreads.map((thread) =>
         scopedThreadKey(scopeThreadRef(thread.environmentId, thread.id)),
       ),
-      projectStatus,
       visibleProjectThreads,
     };
-  }, [projectThreads, threadLastVisitedAts, threadSortOrder]);
+  }, [projectThreads, threadSortOrder]);
   const pinnedCollapsedThread = useMemo(() => {
     const activeThreadKey = activeRouteThreadKey ?? undefined;
     if (!activeThreadKey || projectExpanded) {
@@ -1415,24 +1391,20 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       if (useThreadSelectionStore.getState().hasSelection()) {
         clearSelection();
       }
-      if (projectHeaderAction === "open-project") {
-        void runWorkspaceCommand(
-          WorkspaceCommands.selectProject(project.environmentId, project.id),
-        ).then(() =>
-          router.navigate({
-            to: "/projects/$environmentId/$projectId",
-            params: {
-              environmentId: project.environmentId,
-              projectId: project.id,
-            },
-          }),
-        );
-        if (isMobile) {
-          setOpenMobile(false);
-        }
-        return;
+      void runWorkspaceCommand(
+        WorkspaceCommands.selectProject(project.environmentId, project.id),
+      ).then(() =>
+        router.navigate({
+          to: "/projects/$environmentId/$projectId",
+          params: {
+            environmentId: project.environmentId,
+            projectId: project.id,
+          },
+        }),
+      );
+      if (isMobile) {
+        setOpenMobile(false);
       }
-      setProjectExpanded(projectPreferenceKeys, !projectExpanded);
     },
     [
       clearSelection,
@@ -1440,33 +1412,10 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
       isMobile,
       project.environmentId,
       project.id,
-      projectExpanded,
-      projectHeaderAction,
-      projectPreferenceKeys,
       router,
-      setProjectExpanded,
       setOpenMobile,
       suppressProjectClickAfterDragRef,
       suppressProjectClickForContextMenuRef,
-    ],
-  );
-
-  const handleProjectButtonKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLButtonElement>) => {
-      if (event.key !== "Enter" && event.key !== " ") return;
-      if (projectHeaderAction === "open-project") return;
-      event.preventDefault();
-      if (dragInProgressRef.current) {
-        return;
-      }
-      setProjectExpanded(projectPreferenceKeys, !projectExpanded);
-    },
-    [
-      dragInProgressRef,
-      projectExpanded,
-      projectHeaderAction,
-      projectPreferenceKeys,
-      setProjectExpanded,
     ],
   );
 
@@ -2453,68 +2402,31 @@ const SidebarProjectItem = memo(function SidebarProjectItem(props: SidebarProjec
           borderLeftColor: projectColor,
         }}
       >
-        {projectHeaderAction === "open-project" ? (
-          <button
-            type="button"
-            aria-expanded={projectExpanded}
-            aria-label={`${projectExpanded ? "Collapse" : "Expand"} ${project.displayName}`}
-            className="absolute top-1/2 left-0.5 z-10 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground/70 outline-hidden hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-            onClick={handleProjectDisclosureClick}
-            onPointerDown={(event) => event.stopPropagation()}
-          >
-            <ChevronRightIcon
-              className={`size-3.5 transition-transform duration-150 ${
-                projectExpanded ? "rotate-90" : ""
-              }`}
-            />
-          </button>
-        ) : null}
+        <button
+          type="button"
+          aria-expanded={projectExpanded}
+          aria-label={`${projectExpanded ? "Collapse" : "Expand"} ${project.displayName}`}
+          className="absolute top-1/2 left-0.5 z-10 inline-flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground/70 outline-hidden hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={handleProjectDisclosureClick}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <ChevronRightIcon
+            className={`size-3.5 transition-transform duration-150 ${
+              projectExpanded ? "rotate-90" : ""
+            }`}
+          />
+        </button>
         <SidebarMenuButton
           ref={isManualProjectSorting ? dragHandleProps?.setActivatorNodeRef : undefined}
           size="sm"
-          aria-label={
-            projectHeaderAction === "open-project"
-              ? `Open ${project.displayName} project`
-              : undefined
-          }
-          className={`gap-2 py-1.5 pr-8 text-left hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground max-sm:pr-14 ${
-            projectHeaderAction === "open-project" ? "pl-7" : "px-2"
-          } ${isManualProjectSorting ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
+          aria-label={`Open ${project.displayName} project`}
+          className={`gap-2 py-1.5 pr-8 pl-7 text-left hover:bg-accent group-hover/project-header:bg-accent group-hover/project-header:text-sidebar-accent-foreground max-sm:pr-14 ${isManualProjectSorting ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"}`}
           {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.attributes : {})}
           {...(isManualProjectSorting && dragHandleProps ? dragHandleProps.listeners : {})}
           onPointerDownCapture={handleProjectButtonPointerDownCapture}
           onClick={handleProjectButtonClick}
-          onKeyDown={handleProjectButtonKeyDown}
           onContextMenu={handleProjectButtonContextMenu}
         >
-          {projectHeaderAction === "open-project" ? null : !projectExpanded && projectStatus ? (
-            <Tooltip>
-              <TooltipTrigger
-                render={
-                  <span
-                    aria-label={projectStatus.label}
-                    className={`-ml-0.5 relative inline-flex size-3.5 shrink-0 items-center justify-center ${projectStatus.colorClass}`}
-                  />
-                }
-              >
-                <span className="absolute inset-0 flex items-center justify-center transition-opacity duration-150 group-hover/project-header:opacity-0">
-                  <span
-                    className={`size-[9px] rounded-full ${projectStatus.dotClass} ${
-                      projectStatus.pulse ? "animate-status-pulse" : ""
-                    }`}
-                  />
-                </span>
-                <ChevronRightIcon className="absolute inset-0 m-auto size-3.5 text-muted-foreground/70 opacity-0 transition-opacity duration-150 group-hover/project-header:opacity-100" />
-              </TooltipTrigger>
-              <TooltipPopup side="top">{projectStatus.label}</TooltipPopup>
-            </Tooltip>
-          ) : (
-            <ChevronRightIcon
-              className={`-ml-0.5 size-3.5 shrink-0 text-muted-foreground/70 transition-transform duration-150 ${
-                projectExpanded ? "rotate-90" : ""
-              }`}
-            />
-          )}
           <ProjectFavicon environmentId={project.environmentId} cwd={project.workspaceRoot} />
           <span className="flex min-w-0 flex-1 items-center gap-2">
             <span className="truncate text-xs font-medium text-foreground/90">

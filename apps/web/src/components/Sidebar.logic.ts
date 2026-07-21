@@ -10,7 +10,6 @@ import type { SidebarThreadSummary, Thread } from "../types";
 import { cn } from "../lib/utils";
 import { isLatestTurnSettled } from "../session-logic";
 import { resolveServerBackedAppStageLabel } from "../branding.logic";
-import type { UiGeneration } from "../lib/uiGeneration";
 
 export const THREAD_SELECTION_SAFE_SELECTOR = "[data-thread-item], [data-thread-selection-safe]";
 export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 100;
@@ -18,13 +17,6 @@ export const THREAD_JUMP_HINT_SHOW_DELAY_MS = 100;
 // nearby thread usually reuses an already-hot subscription.
 export const SIDEBAR_THREAD_PREWARM_LIMIT = 10;
 export type SidebarNewThreadEnvMode = "local" | "worktree";
-export type SidebarProjectHeaderAction = "toggle" | "open-project";
-
-export function resolveSidebarProjectHeaderAction(
-  generation: UiGeneration,
-): SidebarProjectHeaderAction {
-  return generation === "next" ? "open-project" : "toggle";
-}
 type SidebarProject = {
   id: string;
   title: string;

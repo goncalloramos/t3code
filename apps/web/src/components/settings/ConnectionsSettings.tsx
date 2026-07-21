@@ -1976,13 +1976,15 @@ export function ConnectionsSettings() {
   const handleDesktopServerExposureChange = useCallback(
     async (checked: boolean) => {
       if (!desktopBridge) return;
+      const shouldDisableRemoteMode = checked && remoteModeState?.preferences.enabled === true;
       setIsUpdatingDesktopServerExposure(true);
+      if (shouldDisableRemoteMode) setIsUpdatingRemoteMode(true);
       setDesktopServerExposureMutationError(null);
+      setRemoteModeError(null);
       try {
         await desktopBridge.setServerExposureMode(checked ? "network-accessible" : "local-only");
         refreshDesktopNetworkAccessState();
         setIsDesktopServerExposureDialogOpen(false);
-        setIsUpdatingDesktopServerExposure(false);
       } catch (error) {
         const message =
           error instanceof Error ? error.message : "Failed to update network exposure.";
@@ -1995,10 +1997,12 @@ export function ConnectionsSettings() {
             description: message,
           }),
         );
+      } finally {
         setIsUpdatingDesktopServerExposure(false);
+        if (shouldDisableRemoteMode) setIsUpdatingRemoteMode(false);
       }
     },
-    [desktopBridge],
+    [desktopBridge, remoteModeState],
   );
 
   const handleConfirmDesktopServerExposureChange = useCallback(() => {
@@ -2569,7 +2573,9 @@ export function ConnectionsSettings() {
   const renderNetworkAccessToggle = () => (
     <Switch
       checked={desktopServerExposureState?.mode === "network-accessible"}
-      disabled={!desktopServerExposureState || isUpdatingDesktopServerExposure}
+      disabled={
+        !desktopServerExposureState || isUpdatingDesktopServerExposure || isUpdatingRemoteMode
+      }
       onCheckedChange={(checked) => {
         setPendingDesktopServerExposureMode(checked ? "network-accessible" : "local-only");
         setIsDesktopServerExposureDialogOpen(true);
@@ -3109,7 +3115,11 @@ export function ConnectionsSettings() {
             }
           />
         ) : desktopServerExposureState ? (
-          "Limited to this machine."
+          remoteModeState?.preferences.enabled ? (
+            "Off while Remote Mode is active. Enabling it will turn Remote Mode off and expose T3 Code to devices on your local network."
+          ) : (
+            "Limited to this machine. Enable to allow devices on your local network to connect."
+          )
         ) : (
           "Loading…"
         )
@@ -3210,7 +3220,7 @@ export function ConnectionsSettings() {
           <AlertDialog
             open={isDesktopServerExposureDialogOpen}
             onOpenChange={(open) => {
-              if (isUpdatingDesktopServerExposure) return;
+              if (isUpdatingDesktopServerExposure || isUpdatingRemoteMode) return;
               setIsDesktopServerExposureDialogOpen(open);
             }}
             onOpenChangeComplete={(open) => {
@@ -3226,14 +3236,21 @@ export function ConnectionsSettings() {
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   {pendingDesktopServerExposureMode === "network-accessible"
-                    ? "T3 Code will restart to expose this environment over the network."
+                    ? remoteModeState?.preferences.enabled
+                      ? "Enabling Network Access will turn off Remote Mode, expose T3 Code to devices on your local network, and restart the app. You can turn Remote Mode back on later, which will return the backend to private loopback access."
+                      : "T3 Code will restart to expose this environment to devices on your local network."
                     : "T3 Code will restart and limit this environment back to this machine."}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
                 <AlertDialogClose
-                  disabled={isUpdatingDesktopServerExposure}
-                  render={<Button variant="outline" disabled={isUpdatingDesktopServerExposure} />}
+                  disabled={isUpdatingDesktopServerExposure || isUpdatingRemoteMode}
+                  render={
+                    <Button
+                      variant="outline"
+                      disabled={isUpdatingDesktopServerExposure || isUpdatingRemoteMode}
+                    />
+                  }
                 >
                   Cancel
                 </AlertDialogClose>
@@ -3243,7 +3260,9 @@ export function ConnectionsSettings() {
                   }
                   onClick={handleConfirmDesktopServerExposureChange}
                   disabled={
-                    pendingDesktopServerExposureMode === null || isUpdatingDesktopServerExposure
+                    pendingDesktopServerExposureMode === null ||
+                    isUpdatingDesktopServerExposure ||
+                    isUpdatingRemoteMode
                   }
                 >
                   {isUpdatingDesktopServerExposure ? (
@@ -3252,7 +3271,11 @@ export function ConnectionsSettings() {
                       Restarting…
                     </>
                   ) : pendingDesktopServerExposureMode === "network-accessible" ? (
-                    "Restart and enable"
+                    remoteModeState?.preferences.enabled ? (
+                      "Turn off Remote Mode and enable"
+                    ) : (
+                      "Restart and enable"
+                    )
                   ) : (
                     "Restart and disable"
                   )}

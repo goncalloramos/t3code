@@ -355,6 +355,53 @@ describe("environment RPC", () => {
     }),
   );
 
+  it.effect("bounds handled domain failure retries within one session", () =>
+    Effect.gen(function* () {
+      const domainError = new Error("thread unavailable");
+      const subscriptionCount = yield* Ref.make(0);
+      const client = {
+        [WS_METHODS.subscribeTerminalEvents]: () =>
+          Ref.update(subscriptionCount, (count) => count + 1).pipe(
+            Effect.andThen(Effect.fail(domainError)),
+            Stream.fromEffect,
+          ),
+      } as unknown as WsRpcProtocolClient;
+      const { activeSession, supervisor } = yield* makeHarness();
+
+      yield* SubscriptionRef.set(activeSession, Option.some(session(client)));
+      yield* subscribe(
+        WS_METHODS.subscribeTerminalEvents,
+        {},
+        {
+          onExpectedFailure: () => Effect.void,
+          retryExpectedFailureAfter: "100 millis",
+          maxExpectedFailureRetries: 2,
+        },
+      ).pipe(
+        Stream.runDrain,
+        Effect.provideService(EnvironmentSupervisor.EnvironmentSupervisor, supervisor),
+        Effect.forkChild,
+      );
+
+      for (let attempt = 0; attempt < 100; attempt += 1) {
+        if ((yield* Ref.get(subscriptionCount)) >= 1) break;
+        yield* Effect.yieldNow;
+      }
+      for (let expectedCount = 2; expectedCount <= 3; expectedCount += 1) {
+        yield* TestClock.adjust("100 millis");
+        for (let attempt = 0; attempt < 100; attempt += 1) {
+          if ((yield* Ref.get(subscriptionCount)) >= expectedCount) break;
+          yield* Effect.yieldNow;
+        }
+      }
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        yield* Effect.yieldNow;
+      }
+
+      expect(yield* Ref.get(subscriptionCount)).toBe(3);
+    }),
+  );
+
   it.effect("does not classify subscription defects as expected failures", () =>
     Effect.gen(function* () {
       const defect = new Error("subscription invariant failed");

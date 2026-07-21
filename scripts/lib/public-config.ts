@@ -5,7 +5,6 @@ import * as NodeURL from "node:url";
 import * as NodeUtil from "node:util";
 
 export interface T3CodePublicConfig {
-  readonly uiGeneration: "legacy" | "next";
   readonly clerkPublishableKey: string | undefined;
   readonly clerkJwtTemplate: string | undefined;
   readonly clerkCliOAuthClientId: string | undefined;
@@ -39,9 +38,6 @@ export function loadRepoEnv({
     ...rootEnv,
     ...localEnv,
     ...baseEnv,
-    T3CODE_UI_GENERATION: config.uiGeneration,
-    VITE_T3CODE_UI_GENERATION: config.uiGeneration,
-    EXPO_PUBLIC_T3CODE_UI_GENERATION: config.uiGeneration,
     ...(config.clerkPublishableKey
       ? {
           T3CODE_CLERK_PUBLISHABLE_KEY: config.clerkPublishableKey,
@@ -107,14 +103,7 @@ export function loadRepoEnv({
 }
 
 export function resolvePublicConfig(...sources: readonly Environment[]): T3CodePublicConfig {
-  const configuredUiGeneration = firstNonEmpty(
-    sources,
-    "T3CODE_UI_GENERATION",
-    "VITE_T3CODE_UI_GENERATION",
-    "EXPO_PUBLIC_T3CODE_UI_GENERATION",
-  );
   return {
-    uiGeneration: configuredUiGeneration === "next" ? "next" : "legacy",
     clerkPublishableKey: firstNonEmpty(
       sources,
       "T3CODE_CLERK_PUBLISHABLE_KEY",

@@ -41,6 +41,20 @@ function formatThreadError(cause: Cause.Cause<unknown>): string {
     : "Could not synchronize the thread.";
 }
 
+function isMissingThreadSnapshotError(cause: Cause.Cause<unknown>): boolean {
+  const isThreadNotFoundMessage = (value: unknown) =>
+    typeof value === "string" && /^Thread .+ was not found$/.test(value);
+
+  return cause.reasons.some(
+    (reason) =>
+      reason._tag === "Fail" &&
+      typeof reason.error === "object" &&
+      reason.error !== null &&
+      "message" in reason.error &&
+      isThreadNotFoundMessage(reason.error.message),
+  );
+}
+
 function shouldPersistThread(thread: OrchestrationThread): boolean {
   const status = thread.session?.status;
   return status !== "starting" && status !== "running";
@@ -243,8 +257,11 @@ export const makeEnvironmentThreadState = Effect.fn("EnvironmentThreadState.make
       });
 
       yield* subscribe(ORCHESTRATION_WS_METHODS.subscribeThread, subscribeInput, {
-        onExpectedFailure: setStreamError,
+        onExpectedFailure: (cause) =>
+          isMissingThreadSnapshotError(cause) ? setDeleted() : setStreamError(cause),
         retryExpectedFailureAfter: "250 millis",
+        shouldRetryExpectedFailure: (cause) => !isMissingThreadSnapshotError(cause),
+        maxExpectedFailureRetries: 4,
       }).pipe(Stream.runForEach(applyItem));
     }),
   );

@@ -155,6 +155,10 @@ export function subscribe<TTag extends EnvironmentSubscriptionRpcTag>(
       cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag>>,
     ) => Effect.Effect<void, never, never>;
     readonly retryExpectedFailureAfter?: Duration.Input;
+    readonly shouldRetryExpectedFailure?: (
+      cause: Cause.Cause<EnvironmentRpcStreamFailure<TTag>>,
+    ) => boolean;
+    readonly maxExpectedFailureRetries?: number;
   },
 ): Stream.Stream<
   EnvironmentRpcStreamValue<TTag>,
@@ -175,7 +179,9 @@ export function subscribe<TTag extends EnvironmentSubscriptionRpcTag>(
                   EnvironmentRpcStreamValue<TTag>,
                   EnvironmentRpcStreamFailure<TTag>
                 >;
-                const subscribeToSession = (): Stream.Stream<
+                const subscribeToSession = (
+                  expectedFailureRetryCount = 0,
+                ): Stream.Stream<
                   EnvironmentRpcStreamValue<TTag>,
                   EnvironmentRpcStreamFailure<TTag>
                 > =>
@@ -206,7 +212,12 @@ export function subscribe<TTag extends EnvironmentSubscriptionRpcTag>(
                           const handled = Stream.fromEffect(options.onExpectedFailure(cause)).pipe(
                             Stream.drain,
                           );
-                          if (options.retryExpectedFailureAfter === undefined) {
+                          if (
+                            options.retryExpectedFailureAfter === undefined ||
+                            options.shouldRetryExpectedFailure?.(cause) === false ||
+                            (options.maxExpectedFailureRetries !== undefined &&
+                              expectedFailureRetryCount >= options.maxExpectedFailureRetries)
+                          ) {
                             return handled;
                           }
                           return handled.pipe(
@@ -215,7 +226,7 @@ export function subscribe<TTag extends EnvironmentSubscriptionRpcTag>(
                                 Effect.sleep(options.retryExpectedFailureAfter),
                               ).pipe(Stream.drain),
                             ),
-                            Stream.concat(subscribeToSession()),
+                            Stream.concat(subscribeToSession(expectedFailureRetryCount + 1)),
                           );
                         }
                         return Stream.failCause(cause);

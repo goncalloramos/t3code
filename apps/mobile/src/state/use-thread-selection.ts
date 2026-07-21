@@ -95,10 +95,13 @@ function useResolvedThreadSelection(params: ThreadSelectionRouteParams | undefin
   const selectedThread = useMemo(
     () =>
       selectedThreadShell ??
-      (selectedThreadRef !== null && selectedThreadDetail !== null
+      (selectedThreadRef !== null &&
+      selectedThreadDetail !== null &&
+      selectedThreadDetailState.status !== "deleted" &&
+      Option.isNone(selectedThreadDetailState.error)
         ? threadDetailToShell(selectedThreadRef.environmentId, selectedThreadDetail)
         : null),
-    [selectedThreadDetail, selectedThreadRef, selectedThreadShell],
+    [selectedThreadDetail, selectedThreadDetailState, selectedThreadRef, selectedThreadShell],
   );
   const selectedProjectRef = useMemo<ScopedProjectRef | null>(
     () =>

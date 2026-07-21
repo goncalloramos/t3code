@@ -19,9 +19,6 @@ describe("loadRepoEnv", () => {
     const env = loadRepoEnv({ baseEnv: {}, repoRoot: makeTemporaryDirectory() });
 
     expect(env.T3CODE_CLERK_PUBLISHABLE_KEY).toBeUndefined();
-    expect(env.T3CODE_UI_GENERATION).toBe("legacy");
-    expect(env.VITE_T3CODE_UI_GENERATION).toBe("legacy");
-    expect(env.EXPO_PUBLIC_T3CODE_UI_GENERATION).toBe("legacy");
     expect(env.T3CODE_CLERK_CLI_OAUTH_CLIENT_ID).toBeUndefined();
     expect(env.VITE_CLERK_PUBLISHABLE_KEY).toBeUndefined();
     expect(env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY).toBeUndefined();
@@ -93,7 +90,6 @@ describe("loadRepoEnv", () => {
         EXPO_PUBLIC_OTLP_TRACES_TOKEN: "mobile-token",
       }),
     ).toEqual({
-      uiGeneration: "legacy",
       clerkPublishableKey: "pk_legacy",
       clerkJwtTemplate: "template_legacy",
       clerkCliOAuthClientId: "oauth_canonical",
@@ -118,9 +114,6 @@ describe("loadRepoEnv", () => {
         repoRoot: makeTemporaryDirectory(),
       }),
     ).toEqual({
-      T3CODE_UI_GENERATION: "legacy",
-      VITE_T3CODE_UI_GENERATION: "legacy",
-      EXPO_PUBLIC_T3CODE_UI_GENERATION: "legacy",
       T3CODE_RELAY_CLIENT_OTLP_TRACES_URL: "https://api.axiom.co/v1/traces",
       T3CODE_RELAY_CLIENT_OTLP_TRACES_DATASET: "relay-client-traces",
       T3CODE_RELAY_CLIENT_OTLP_TRACES_TOKEN: "relay-client-token",
@@ -142,9 +135,6 @@ describe("loadRepoEnv", () => {
         repoRoot: makeTemporaryDirectory(),
       }),
     ).toEqual({
-      T3CODE_UI_GENERATION: "legacy",
-      VITE_T3CODE_UI_GENERATION: "legacy",
-      EXPO_PUBLIC_T3CODE_UI_GENERATION: "legacy",
       T3CODE_RELAY_URL: "https://relay.example.test",
       VITE_T3CODE_RELAY_URL: "https://relay.example.test",
       T3CODE_MOBILE_OTLP_TRACES_URL: "https://api.axiom.co/v1/traces",
@@ -154,23 +144,6 @@ describe("loadRepoEnv", () => {
       EXPO_PUBLIC_OTLP_TRACES_DATASET: "mobile-traces",
       EXPO_PUBLIC_OTLP_TRACES_TOKEN: "mobile-token",
     });
-  });
-
-  it("projects one validated UI generation to Vite and Expo", () => {
-    expect(
-      loadRepoEnv({
-        baseEnv: { T3CODE_UI_GENERATION: "next" },
-        repoRoot: makeTemporaryDirectory(),
-      }),
-    ).toEqual({
-      T3CODE_UI_GENERATION: "next",
-      VITE_T3CODE_UI_GENERATION: "next",
-      EXPO_PUBLIC_T3CODE_UI_GENERATION: "next",
-    });
-
-    expect(resolvePublicConfig({ T3CODE_UI_GENERATION: "experimental" }).uiGeneration).toBe(
-      "legacy",
-    );
   });
 });
 

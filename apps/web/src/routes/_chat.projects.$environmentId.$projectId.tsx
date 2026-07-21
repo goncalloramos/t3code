@@ -1,7 +1,7 @@
 import { scopeProjectRef } from "@t3tools/client-runtime/environment";
 import { WorkspaceCommands, workspaceAgentState } from "@t3tools/client-runtime/workspace";
 import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
-import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import {
   AlertCircleIcon,
   ArrowRightIcon,
@@ -27,7 +27,6 @@ import {
 } from "../state/workspace";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { cn } from "../lib/utils";
-import { currentUiGeneration } from "../lib/uiGeneration";
 import { isWorkspaceProjectRouteResolved } from "../workspaceProjectRoute";
 
 function statusPresentation(thread: Parameters<typeof workspaceAgentState>[0]) {
@@ -200,8 +199,5 @@ function ProjectOverviewRouteView() {
 }
 
 export const Route = createFileRoute("/_chat/projects/$environmentId/$projectId")({
-  beforeLoad: () => {
-    if (currentUiGeneration === "legacy") throw redirect({ to: "/" });
-  },
   component: ProjectOverviewRouteView,
 });

@@ -7,6 +7,7 @@ import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 
 import * as DesktopLifecycle from "../../app/DesktopLifecycle.ts";
+import * as DesktopRemoteAccess from "../../app/DesktopRemoteAccess.ts";
 import * as DesktopServerExposure from "../../backend/DesktopServerExposure.ts";
 import * as IpcChannels from "../channels.ts";
 import * as DesktopIpc from "../DesktopIpc.ts";
@@ -32,10 +33,24 @@ export const setServerExposureMode = DesktopIpc.makeIpcMethod({
   result: DesktopServerExposureStateSchema,
   handler: Effect.fn("desktop.ipc.serverExposure.setMode")(function* (mode) {
     const lifecycle = yield* DesktopLifecycle.DesktopLifecycle;
+    const remoteAccess = yield* DesktopRemoteAccess.DesktopRemoteAccess;
     const serverExposure = yield* DesktopServerExposure.DesktopServerExposure;
+    const remoteModeState = yield* remoteAccess.getState;
+    let remoteModeRequiresRelaunch = false;
+    if (mode === "network-accessible" && remoteModeState.preferences.enabled) {
+      const remoteModeChange = yield* remoteAccess.setPreferences({
+        ...remoteModeState.preferences,
+        enabled: false,
+      });
+      remoteModeRequiresRelaunch = remoteModeChange.requiresRelaunch;
+    }
     const change = yield* serverExposure.setMode(mode);
-    if (change.requiresRelaunch) {
-      yield* lifecycle.relaunch(`serverExposureMode=${mode}`);
+    if (change.requiresRelaunch || remoteModeRequiresRelaunch) {
+      yield* lifecycle.relaunch(
+        remoteModeRequiresRelaunch
+          ? `serverExposureMode=${mode};remote-mode-disabled`
+          : `serverExposureMode=${mode}`,
+      );
     }
     return change.state;
   }),

@@ -1,4 +1,5 @@
 import type { ExpoConfig } from "expo/config";
+import desktopPackage from "../desktop/package.json" with { type: "json" };
 
 import { BRAND_ASSET_PATHS } from "../../scripts/lib/brand-assets.ts";
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
@@ -131,7 +132,7 @@ function resolveAppVariant(value: string | undefined): AppVariant {
 }
 
 const variant = VARIANT_CONFIG[APP_VARIANT];
-const appVersion = isGoncalloramosBuild ? "0.28.3" : "0.1.0";
+const appVersion = isGoncalloramosBuild ? desktopPackage.version : "0.1.0";
 const iosBundleIdentifier = isIosPersonalTeamBuild
   ? personalTeamBundleIdentifier!
   : variant.iosBundleIdentifier;
@@ -331,6 +332,10 @@ const config: ExpoConfig = {
       {
         ios: {
           deploymentTarget: "18.0",
+          // CocoaPods 1.17 rejects React Native 0.85's optional prebuilt-core podspec because it
+          // has no source attribute. Build the private release from source so clean archives stay
+          // reproducible without changing the official variants' faster prebuilt path.
+          buildReactNativeFromSource: isGoncalloramosBuild,
           // AppCheckCore 11.3+ includes Swift and needs module maps for these Objective-C dependencies.
           extraPods: [
             { name: "GoogleUtilities", modular_headers: true },
@@ -357,7 +362,6 @@ const config: ExpoConfig = {
   ],
   extra: {
     appVariant: APP_VARIANT,
-    uiGeneration: repoEnv.EXPO_PUBLIC_T3CODE_UI_GENERATION ?? "legacy",
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,
