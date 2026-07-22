@@ -13,6 +13,7 @@ import * as Layer from "effect/Layer";
 import * as LogLevel from "effect/LogLevel";
 import * as Path from "effect/Path";
 import * as Schema from "effect/Schema";
+import type { DesktopApnsBootstrapCredentials } from "@t3tools/contracts";
 
 export const DEFAULT_PORT = 3773;
 
@@ -75,6 +76,7 @@ export class ServerConfig extends Context.Service<
     readonly logWebSocketEvents: boolean;
     readonly tailscaleServeEnabled: boolean;
     readonly tailscaleServePort: number;
+    readonly apnsCredentials?: DesktopApnsBootstrapCredentials | undefined;
   }
 >()("t3/config/ServerConfig") {
   /** @deprecated Import and use `layerTest` from this module. */
@@ -174,6 +176,7 @@ const makeTest = Effect.fn("ServerConfig.makeTest")(function* (
     logWebSocketEvents: false,
     tailscaleServeEnabled: false,
     tailscaleServePort: 443,
+    apnsCredentials: undefined,
     port: 0,
     host: undefined,
     desktopBootstrapToken: undefined,

@@ -44,6 +44,13 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   },
   getLocalEnvironmentBearerToken: () =>
     ipcRenderer.invoke(IpcChannels.GET_LOCAL_ENVIRONMENT_BEARER_TOKEN_CHANNEL),
+  getApnsConfigurationStatus: () =>
+    ipcRenderer.invoke(IpcChannels.GET_APNS_CONFIGURATION_STATUS_CHANNEL),
+  importApnsCredentials: (input) =>
+    ipcRenderer.invoke(IpcChannels.IMPORT_APNS_CREDENTIALS_CHANNEL, input),
+  removeApnsCredentials: () => ipcRenderer.invoke(IpcChannels.REMOVE_APNS_CREDENTIALS_CHANNEL),
+  restartPrimaryBackendForApns: () =>
+    ipcRenderer.invoke(IpcChannels.RESTART_PRIMARY_BACKEND_FOR_APNS_CHANNEL),
   getClientSettings: () => ipcRenderer.invoke(IpcChannels.GET_CLIENT_SETTINGS_CHANNEL),
   setClientSettings: (settings) =>
     ipcRenderer.invoke(IpcChannels.SET_CLIENT_SETTINGS_CHANNEL, settings),

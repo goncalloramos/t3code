@@ -46,6 +46,8 @@ import Migration0030 from "./Migrations/030_ProjectionThreadShellArchiveIndexes.
 import Migration0031 from "./Migrations/031_AuthAuthorizationScopes.ts";
 import Migration0032 from "./Migrations/032_AuthPairingProofKeyThumbprint.ts";
 import Migration0033 from "./Migrations/033_ProjectionProjectColor.ts";
+import Migration0034 from "./Migrations/034_AuthNotificationScope.ts";
+import Migration0035 from "./Migrations/035_AgentNotifications.ts";
 
 /**
  * Migration loader with all migrations defined inline.
@@ -91,6 +93,8 @@ export const migrationEntries = [
   [31, "AuthAuthorizationScopes", Migration0031],
   [32, "AuthPairingProofKeyThumbprint", Migration0032],
   [33, "ProjectionProjectColor", Migration0033],
+  [34, "AuthNotificationScope", Migration0034],
+  [35, "AgentNotifications", Migration0035],
 ] as const;
 
 export const makeMigrationLoader = (throughId?: number) =>

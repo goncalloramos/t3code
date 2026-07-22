@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Stale active-turn reliability fix</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f4f7fb;
+        --paper: #fff;
+        --text: #172033;
+        --muted: #5b667a;
+        --line: #dce3ed;
+        --blue: #275bd6;
+        --blue-soft: #eaf0ff;
+        --green: #157347;
+        --green-soft: #eaf8f1;
+        --amber: #9a5b08;
+        --amber-soft: #fff6df;
+        --red: #b42318;
+        --red-soft: #ffefed;
+        --shadow: 0 16px 50px rgba(24, 39, 75, 0.08);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font:
+          15px/1.58 ui-sans-serif,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+      main {
+        width: min(1120px, calc(100% - 32px));
+        margin: 32px auto 64px;
+      }
+      header,
+      .card {
+        background: var(--paper);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        box-shadow: var(--shadow);
+      }
+      header {
+        padding: clamp(24px, 5vw, 52px);
+        position: relative;
+        overflow: hidden;
+      }
+      header::after {
+        content: "";
+        position: absolute;
+        width: 240px;
+        height: 240px;
+        border-radius: 50%;
+        right: -90px;
+        top: -120px;
+        background: var(--blue-soft);
+      }
+      .eyebrow {
+        color: var(--blue);
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+      }
+      .theme-toggle {
+        position: absolute;
+        z-index: 2;
+        right: 20px;
+        top: 20px;
+        border: 1px solid var(--line);
+        background: var(--paper);
+        color: var(--text);
+        border-radius: 999px;
+        padding: 8px 12px;
+        font:
+          600 13px/1 ui-sans-serif,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+        cursor: pointer;
+      }
+      .theme-toggle:focus-visible {
+        outline: 3px solid var(--blue);
+        outline-offset: 3px;
+      }
+      h1 {
+        margin: 8px 0 12px;
+        max-width: 760px;
+        font-size: clamp(30px, 5vw, 54px);
+        line-height: 1.06;
+        letter-spacing: -0.035em;
+      }
+      .lede {
+        margin: 0;
+        max-width: 780px;
+        color: var(--muted);
+        font-size: clamp(16px, 2.2vw, 20px);
+      }
+      .status {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-top: 24px;
+      }
+      .pill {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 7px 11px;
+        font-size: 13px;
+        font-weight: 650;
+      }
+      .pill.ok {
+        color: var(--green);
+        background: var(--green-soft);
+        border-color: #bfe7d1;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 16px;
+        margin-top: 16px;
+      }
+      .card {
+        grid-column: span 6;
+        padding: 22px;
+      }
+      .wide {
+        grid-column: 1/-1;
+      }
+      h2 {
+        margin: 0 0 14px;
+        font-size: 20px;
+        letter-spacing: -0.015em;
+      }
+      h3 {
+        margin: 18px 0 6px;
+        font-size: 15px;
+      }
+      p {
+        margin: 8px 0;
+      }
+      ul,
+      ol {
+        margin: 10px 0 0;
+        padding-left: 22px;
+      }
+      li + li {
+        margin-top: 7px;
+      }
+      code {
+        font:
+          13px/1.45 ui-monospace,
+          SFMono-Regular,
+          Menlo,
+          monospace;
+        background: #eef2f7;
+        color: #20304f;
+        border-radius: 5px;
+        padding: 2px 5px;
+        overflow-wrap: anywhere;
+      }
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        align-items: stretch;
+      }
+      .step {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 14px;
+        min-width: 0;
+        background: #fbfcfe;
+      }
+      .step strong {
+        display: block;
+        margin-bottom: 5px;
+      }
+      .step.bad {
+        border-color: #f0bbb5;
+        background: var(--red-soft);
+      }
+      .step.fix {
+        border-color: #b8d9ff;
+        background: var(--blue-soft);
+      }
+      .arrow {
+        display: none;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+      }
+      th,
+      td {
+        text-align: left;
+        vertical-align: top;
+        padding: 11px 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      th {
+        color: var(--muted);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .result {
+        color: var(--green);
+        font-weight: 700;
+      }
+      .callout {
+        border-left: 4px solid var(--blue);
+        background: var(--blue-soft);
+        padding: 13px 15px;
+        border-radius: 0 10px 10px 0;
+      }
+      .warning {
+        border-left-color: var(--amber);
+        background: var(--amber-soft);
+      }
+      footer {
+        color: var(--muted);
+        margin-top: 18px;
+        text-align: center;
+        font-size: 13px;
+      }
+      @media (max-width: 760px) {
+        main {
+          width: min(100% - 20px, 1120px);
+          margin-top: 10px;
+        }
+        .card {
+          grid-column: 1/-1;
+        }
+        .flow {
+          grid-template-columns: 1fr;
+        }
+        header,
+        .card {
+          border-radius: 14px;
+        }
+        table {
+          display: block;
+          overflow-x: auto;
+        }
+      }
+      html[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #0e1420;
+        --paper: #151d2b;
+        --text: #edf2fb;
+        --muted: #a9b4c8;
+        --line: #2c384d;
+        --blue: #8db2ff;
+        --blue-soft: #1d2d50;
+        --green: #68d6a0;
+        --green-soft: #15352a;
+        --amber: #f2bd62;
+        --amber-soft: #3b2b12;
+        --red-soft: #41211f;
+        --shadow: none;
+      }
+      html[data-theme="dark"] code {
+        background: #202b3e;
+        color: #dce8ff;
+      }
+      html[data-theme="dark"] .step {
+        background: #111a28;
+      }
+      @media print {
+        :root {
+          color-scheme: light;
+        }
+        body {
+          background: #fff;
+        }
+        main {
+          width: 100%;
+          margin: 0;
+        }
+        header,
+        .card {
+          box-shadow: none;
+          break-inside: avoid;
+        }
+        .grid {
+          gap: 10px;
+        }
+        footer {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <button class="theme-toggle" type="button" aria-pressed="false">Dark mode</button>
+        <div class="eyebrow">Reliability investigation · 21 July 2026</div>
+        <h1>Stale active turns after Stop or restart</h1>
+        <p class="lede">
+          The custom fork inherited an upstream orchestration bug: a provider could become ready
+          while its previous active turn ID remained attached, leaving the UI permanently “running”
+          with no live work.
+        </p>
+        <div class="status">
+          <span class="pill ok">Upstream fix adopted</span>
+          <span class="pill ok">4,919 tests passed</span>
+          <span class="pill ok">Typecheck passed</span>
+          <span class="pill ok">Check passed</span>
+        </div>
+      </header>
+
+      <section class="grid" aria-label="Investigation summary">
+        <article class="card">
+          <h2>Provenance</h2>
+          <p>
+            This was not introduced by the quota UI, branding, desktop isolation, or Remote Mode
+            changes.
+          </p>
+          <ul>
+            <li>
+              The interrupt path is identical to <code>upstream/main</code> and originates in
+              official T3 commits.
+            </li>
+            <li>
+              Official T3 fixed the defect in <code>501ce27b8</code>: “Clear stale active turn when
+              session becomes inactive” (#3159).
+            </li>
+            <li>
+              The custom release branched before that fix and therefore retained the older behavior.
+            </li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Observed evidence</h2>
+          <ul>
+            <li>
+              Three sessions reached <code>ready</code> while retaining non-null
+              <code>active_turn_id</code> values.
+            </li>
+            <li>
+              Provider logs stopped mid-reasoning or mid-command and emitted no terminal turn event.
+            </li>
+            <li>
+              Restarting restored the contradictory persisted state instead of restoring the dead
+              processes.
+            </li>
+            <li>
+              The SQLite database passed integrity checks; the defect was lifecycle reconciliation,
+              not corruption.
+            </li>
+          </ul>
+        </article>
+
+        <article class="card wide">
+          <h2>Failure chain and corrected invariant</h2>
+          <div class="flow" role="list" aria-label="Lifecycle sequence">
+            <div class="step" role="listitem">
+              <strong>1 · Turn starts</strong><code>status=running</code><br /><code
+                >activeTurnId=T1</code
+              >
+            </div>
+            <div class="step" role="listitem">
+              <strong>2 · Stop/restart</strong>The provider interrupts or loses the in-flight
+              process.
+            </div>
+            <div class="step bad" role="listitem">
+              <strong>3 · Old behavior</strong><code>status=ready</code><br /><code
+                >activeTurnId=T1</code
+              ><br />UI remains falsely active.
+            </div>
+            <div class="step fix" role="listitem">
+              <strong>4 · Fixed behavior</strong>Inactive status forces<br /><code
+                >activeTurnId=null</code
+              >.
+            </div>
+          </div>
+          <p class="callout">
+            <strong>Invariant:</strong> only <code>starting</code> and <code>running</code> sessions
+            may own an active turn. Provider <code>waiting</code> maps to running and remains valid;
+            <code>ready</code>, <code>interrupted</code>, <code>stopped</code>, and
+            <code>error</code> clear the ID.
+          </p>
+        </article>
+
+        <article class="card">
+          <h2>Code change</h2>
+          <p><code>apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.ts</code></p>
+          <ul>
+            <li>Adds <code>sessionStatusAllowsActiveTurn</code>.</li>
+            <li>Clears the previous ID on inactive <code>session.state.changed</code> events.</li>
+            <li>Preserves active state for mid-turn session/thread-start events.</li>
+          </ul>
+          <p><code>apps/server/src/orchestration/Layers/ProviderRuntimeIngestion.test.ts</code></p>
+          <ul>
+            <li>
+              Reproduces <code>running + T1 → ready + null</code> and guards against regression.
+            </li>
+          </ul>
+        </article>
+
+        <article class="card">
+          <h2>Verification</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Check</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Focused ingestion tests</td>
+                <td class="result">40 / 40 passed</td>
+              </tr>
+              <tr>
+                <td>Full test suite</td>
+                <td class="result">4,919 passed; 7 skipped</td>
+              </tr>
+              <tr>
+                <td><code>vp check</code></td>
+                <td class="result">Passed; 10 existing warnings</td>
+              </tr>
+              <tr>
+                <td><code>vp run typecheck</code></td>
+                <td class="result">Passed across 15 packages</td>
+              </tr>
+            </tbody>
+          </table>
+        </article>
+
+        <article class="card wide">
+          <h2>Rollout and operational follow-up</h2>
+          <ol>
+            <li>
+              Ship the server fix in the next custom desktop build; source changes do not alter the
+              currently installed app.
+            </li>
+            <li>
+              On first provider reconnect, inactive session events will clear stale active IDs
+              through the normal event stream.
+            </li>
+            <li>
+              Reconnect or disable the Stripe MCP integration whose refresh token returned
+              <code>invalid_grant</code>; it is separate from the stale-state defect but can delay
+              turn startup.
+            </li>
+            <li>
+              Add log retention/rotation monitoring. Provider logs currently occupy about
+              1.6&nbsp;GB, and the data volume was observed at 98% usage.
+            </li>
+          </ol>
+          <p class="callout warning">
+            <strong>Scope:</strong> no user database was manually edited, no upstream merge was
+            performed, and unrelated worktree changes were preserved.
+          </p>
+        </article>
+      </section>
+      <footer>Generated as durable implementation and verification context. Not committed.</footer>
+    </main>
+    <script>
+      const toggle = document.querySelector(".theme-toggle");
+      toggle.addEventListener("click", () => {
+        const dark = document.documentElement.dataset.theme !== "dark";
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+        toggle.setAttribute("aria-pressed", String(dark));
+        toggle.textContent = dark ? "Light mode" : "Dark mode";
+      });
+    </script>
+  </body>
+</html>

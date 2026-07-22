@@ -1155,6 +1155,7 @@ const WorkGroupSection = memo(function WorkGroupSection({
                       alt={image.alt}
                       cwd={markdownCwd}
                       threadRef={threadRef ?? undefined}
+                      sourceKind="tool-image"
                       className="mx-auto rounded-lg"
                       onExpand={(source) =>
                         onImageExpand({

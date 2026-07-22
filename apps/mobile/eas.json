@@ -54,6 +54,7 @@
       "corepack": true,
       "env": {
         "APP_VARIANT": "goncalloramos",
+        "T3CODE_APNS_ENVIRONMENT": "production",
         "NODE_OPTIONS": "--max-old-space-size=4096"
       },
       "distribution": "internal",

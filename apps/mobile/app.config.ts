@@ -11,6 +11,7 @@ const repoEnv = loadRepoEnv();
 Object.assign(process.env, repoEnv);
 
 const APP_VARIANT = resolveAppVariant(repoEnv.APP_VARIANT);
+const APS_ENVIRONMENT = resolveApsEnvironment(repoEnv.T3CODE_APNS_ENVIRONMENT, APP_VARIANT);
 const isIosPersonalTeamBuild = repoEnv.T3CODE_IOS_PERSONAL_TEAM === "1";
 const isGoncalloramosBuild = APP_VARIANT === "goncalloramos";
 const goncalloramosAppleTeamId = repoEnv.T3CODE_APPLE_TEAM_ID?.trim();
@@ -129,6 +130,16 @@ function resolveAppVariant(value: string | undefined): AppVariant {
     default:
       return "production";
   }
+}
+
+function resolveApsEnvironment(
+  value: string | undefined,
+  appVariant: AppVariant,
+): "sandbox" | "production" {
+  if (value === "sandbox" || value === "production") {
+    return value;
+  }
+  return appVariant === "development" || appVariant === "goncalloramos" ? "sandbox" : "production";
 }
 
 const variant = VARIANT_CONFIG[APP_VARIANT];
@@ -286,7 +297,7 @@ const config: ExpoConfig = {
       {
         icon: variant.assets.androidNotificationIcon,
         color: variant.assets.androidNotificationColor,
-        mode: APP_VARIANT === "development" ? "development" : "production",
+        mode: APS_ENVIRONMENT === "sandbox" ? "development" : "production",
       },
     ],
     // appleSignIn must be gated here: withoutIosPersonalTeamCapabilities.cjs runs before
@@ -362,6 +373,7 @@ const config: ExpoConfig = {
   ],
   extra: {
     appVariant: APP_VARIANT,
+    apsEnvironment: APS_ENVIRONMENT,
     iosPersonalTeamBuild: isIosPersonalTeamBuild,
     relay: {
       url: repoEnv.T3CODE_RELAY_URL ?? null,

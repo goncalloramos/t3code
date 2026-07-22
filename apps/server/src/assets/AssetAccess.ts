@@ -6,6 +6,9 @@ import {
   AssetProjectFaviconNotFoundError,
   AssetProjectFaviconResolutionError,
   AssetSigningKeyLoadError,
+  AssetToolImageInspectionError,
+  AssetToolImageNotAuthorizedError,
+  AssetToolImageNotFoundError,
   AssetWorkspaceAssetInspectionError,
   AssetWorkspaceAssetNotFoundError,
   AssetWorkspaceContextNotFoundError,
@@ -75,6 +78,12 @@ const AssetClaimsSchema = Schema.Union([
     version: Schema.Literal(1),
     kind: Schema.Literal("attachment"),
     attachmentId: Schema.String,
+    expiresAt: Schema.Number,
+  }),
+  Schema.Struct({
+    version: Schema.Literal(1),
+    kind: Schema.Literal("tool-image-exact"),
+    path: Schema.String,
     expiresAt: Schema.Number,
   }),
   Schema.Struct({
@@ -165,6 +174,7 @@ const resolveCanonicalWorkspaceFileForRequest = (input: {
 export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (input: {
   readonly resource: AssetResource;
   readonly workspaceRoot?: string;
+  readonly authorizedToolImagePath?: string;
 }) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
@@ -270,6 +280,39 @@ export const issueAssetUrl = Effect.fn("AssetAccess.issueAssetUrl")(function* (i
         expiresAt,
       };
       fileName = path.basename(attachmentPath);
+      break;
+    }
+    case "tool-image": {
+      if (
+        input.authorizedToolImagePath !== input.resource.path ||
+        !path.isAbsolute(input.resource.path) ||
+        !isWorkspaceImagePreviewPath(input.resource.path)
+      ) {
+        return yield* new AssetToolImageNotAuthorizedError({ resource: input.resource });
+      }
+      const canonicalFile = yield* optionOnNotFound(fileSystem.realPath(input.resource.path)).pipe(
+        Effect.mapError(
+          (cause) => new AssetToolImageInspectionError({ resource: input.resource, cause }),
+        ),
+      );
+      if (Option.isNone(canonicalFile)) {
+        return yield* new AssetToolImageNotFoundError({ resource: input.resource });
+      }
+      const info = yield* optionOnNotFound(fileSystem.stat(canonicalFile.value)).pipe(
+        Effect.mapError(
+          (cause) => new AssetToolImageInspectionError({ resource: input.resource, cause }),
+        ),
+      );
+      if (Option.isNone(info) || info.value.type !== "File") {
+        return yield* new AssetToolImageNotFoundError({ resource: input.resource });
+      }
+      claims = {
+        version: 1,
+        kind: "tool-image-exact",
+        path: canonicalFile.value,
+        expiresAt,
+      };
+      fileName = path.basename(canonicalFile.value);
       break;
     }
     case "project-favicon": {
@@ -385,6 +428,23 @@ export const resolveAsset = Effect.fn("AssetAccess.resolveAsset")(function* (
     );
     return Option.isSome(info) && info.value.type === "File"
       ? ({ kind: "file", path: attachmentPath } satisfies ResolvedAsset)
+      : null;
+  }
+
+  if (claims.kind === "tool-image-exact") {
+    const decodedPath = decodeRelativePath(relativePath);
+    const path = yield* Path.Path;
+    if (decodedPath !== path.basename(claims.path)) return null;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const canonicalFile = yield* optionOnNotFound(fileSystem.realPath(claims.path)).pipe(
+      Effect.orElseSucceed(() => Option.none()),
+    );
+    if (Option.isNone(canonicalFile) || canonicalFile.value !== claims.path) return null;
+    const info = yield* optionOnNotFound(fileSystem.stat(canonicalFile.value)).pipe(
+      Effect.orElseSucceed(() => Option.none()),
+    );
+    return Option.isSome(info) && info.value.type === "File"
+      ? ({ kind: "file", path: canonicalFile.value } satisfies ResolvedAsset)
       : null;
   }
 

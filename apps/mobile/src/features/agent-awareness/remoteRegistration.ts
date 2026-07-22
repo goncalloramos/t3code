@@ -4,7 +4,11 @@ import * as Notifications from "expo-notifications";
 import * as Effect from "effect/Effect";
 import * as Schema from "effect/Schema";
 import { AppState, Platform } from "react-native";
-import type { EnvironmentId } from "@t3tools/contracts";
+import {
+  DIRECT_AGENT_NOTIFICATION_BUNDLE_ID,
+  type AgentNotificationDeviceRegistration,
+  type EnvironmentId,
+} from "@t3tools/contracts";
 import {
   type RelayDeviceRegistrationRequest,
   type RelayAgentActivitySnapshotResponse,
@@ -33,6 +37,11 @@ import AgentActivity, { type AgentActivityProps } from "../../widgets/AgentActiv
 import { resolveCloudPublicConfig } from "../cloud/publicConfig";
 import { supportsAgentAwarenessPush } from "./capabilities";
 import { makeRelayDeviceRegistrationRequest, resolveApsEnvironment } from "./registrationPayload";
+import {
+  __resetDirectNotificationRegistrationForTest,
+  removeDirectNotificationEnvironmentState,
+  synchronizeDirectNotificationRegistration,
+} from "./directRegistration";
 
 const REMOTE_ACTIVITY_REGISTRATION_RETRY_MS = 15_000;
 
@@ -624,7 +633,11 @@ function startPendingDeviceRegistration(): void {
     const result = await settleAsyncResult(() =>
       runtime.runPromiseExit(registerDevice(next.input, generation)),
     );
-    if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+    if (
+      generation === deviceRegistrationGeneration &&
+      result._tag === "Failure" &&
+      !isAtomCommandInterrupted(result)
+    ) {
       // A transient failure on a later refresh (e.g. token rotation) leaves
       // the prior accepted registration intact on the relay, so an already
       // registered device stays "registered" rather than flipping the
@@ -638,7 +651,9 @@ function startPendingDeviceRegistration(): void {
     if (activeDeviceRegistration === registration) {
       activeDeviceRegistration = null;
     }
-    startPendingDeviceRegistration();
+    if (generation === deviceRegistrationGeneration) {
+      startPendingDeviceRegistration();
+    }
   })();
 }
 
@@ -706,20 +721,53 @@ function registerDevice(
       notificationsEnabled: pushTokenRegistration.notificationsEnabled,
     });
     const bundleId = Constants.expoConfig?.ios?.bundleIdentifier?.trim();
-    yield* registerDeviceWithRelay(
-      makeRelayDeviceRegistrationRequest({
-        deviceId,
-        label: Constants.deviceName?.trim() || "iOS device",
-        iosMajorVersion: iosMajorVersion(),
-        appVersion: Constants.expoConfig?.version,
-        ...(bundleId ? { bundleId } : {}),
-        apsEnvironment: resolveApsEnvironment(Constants.expoConfig?.extra?.appVariant),
-        ...(pushTokenRegistration.pushToken ? { pushToken: pushTokenRegistration.pushToken } : {}),
-        notificationsEnabled: pushTokenRegistration.notificationsEnabled,
-        preferences,
-      }),
-      expectedGeneration,
+    const relayRegistration = makeRelayDeviceRegistrationRequest({
+      deviceId,
+      label: Constants.deviceName?.trim() || "iOS device",
+      iosMajorVersion: iosMajorVersion(),
+      appVersion: Constants.expoConfig?.version,
+      ...(bundleId ? { bundleId } : {}),
+      apsEnvironment: resolveApsEnvironment(
+        Constants.expoConfig?.extra?.appVariant,
+        Constants.expoConfig?.extra?.apsEnvironment,
+      ),
+      ...(pushTokenRegistration.pushToken ? { pushToken: pushTokenRegistration.pushToken } : {}),
+      notificationsEnabled: pushTokenRegistration.notificationsEnabled,
+      preferences,
+    });
+    yield* registerDeviceWithRelay(relayRegistration, expectedGeneration);
+
+    const directRegistration: AgentNotificationDeviceRegistration = {
+      label: relayRegistration.label,
+      platform: "ios",
+      // A disabled registration is sent as DELETE before this value is used.
+      pushToken: pushTokenRegistration.pushToken ?? "00",
+      bundleId: DIRECT_AGENT_NOTIFICATION_BUNDLE_ID,
+      apsEnvironment: relayRegistration.apsEnvironment ?? "production",
+      ...(relayRegistration.appVersion ? { appVersion: relayRegistration.appVersion } : {}),
+      iosMajorVersion: relayRegistration.iosMajorVersion,
+      preferences: {
+        notificationsEnabled:
+          pushTokenRegistration.notificationsEnabled && preferences.notificationsEnabled !== false,
+        notifyOnApproval: preferences.notifyOnApproval !== false,
+        notifyOnInput: preferences.notifyOnInput !== false,
+        notifyOnCompletion: preferences.notifyOnCompletion !== false,
+        notifyOnFailure: preferences.notifyOnFailure !== false,
+      },
+    };
+    const results = yield* Effect.forEach(
+      [...environmentConnections.values()],
+      (connection) =>
+        synchronizeDirectNotificationRegistration({
+          connection,
+          deviceId,
+          registration: directRegistration,
+        }),
+      { concurrency: 4 },
     );
+    if (expectedGeneration === deviceRegistrationGeneration && results.some(Boolean)) {
+      setRegistrationStatus("registered");
+    }
   });
 }
 
@@ -761,6 +809,7 @@ function ensureAppStateListener(): void {
     if (state !== "active") {
       return;
     }
+    enqueueDeviceRegistration({}, "device registration after app foreground failed");
     runRegistrationInBackground(
       refreshActiveLiveActivityRemoteRegistration(),
       "active live activity reconciliation after app foreground failed",
@@ -800,6 +849,7 @@ export function registerAgentAwarenessConnection(connection: SavedRemoteConnecti
 
 function removeAgentAwarenessConnection(environmentId: EnvironmentId): void {
   environmentConnections.delete(environmentId);
+  removeDirectNotificationEnvironmentState(environmentId);
 }
 
 export function unregisterAgentAwarenessConnection(environmentId: EnvironmentId): void {
@@ -870,6 +920,7 @@ export function __resetAgentAwarenessRemoteRegistrationForTest(): void {
   registrationStatus = "unknown";
   registrationStatusListeners.clear();
   registeredActivityPushTokens.clear();
+  __resetDirectNotificationRegistrationForTest();
 }
 
 export function unregisterAgentAwarenessDeviceForCurrentUser(

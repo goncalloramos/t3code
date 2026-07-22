@@ -366,6 +366,7 @@ export const resolveServerConfig = (
       logWebSocketEvents,
       tailscaleServeEnabled,
       tailscaleServePort,
+      apnsCredentials: bootstrap?.apnsCredentials,
     };
 
     return config;

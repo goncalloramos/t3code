@@ -54,6 +54,7 @@ import * as PreviewManager from "./preview/Manager.ts";
 import * as DesktopWindow from "./window/DesktopWindow.ts";
 import * as DesktopWslBackend from "./wsl/DesktopWslBackend.ts";
 import * as DesktopWslEnvironment from "./wsl/DesktopWslEnvironment.ts";
+import * as DesktopApnsCredentialsStore from "./settings/DesktopApnsCredentialsStore.ts";
 
 const desktopEnvironmentLayer = Layer.unwrap(
   Effect.gen(function* () {
@@ -126,6 +127,7 @@ const desktopFoundationLayer = Layer.mergeAll(
   DesktopConnectionCatalogStore.layer.pipe(Layer.provideMerge(DesktopSavedEnvironments.layer)),
   DesktopAssets.layer,
   DesktopObservability.layer,
+  DesktopApnsCredentialsStore.layer,
 ).pipe(Layer.provideMerge(desktopEnvironmentLayer));
 
 const desktopSshLayer = desktopSshEnvironmentLayer.pipe(
@@ -154,7 +156,7 @@ const desktopWindowLayer = DesktopWindow.layer.pipe(
 // DesktopBackendPool.ts header for the full rollout plan.
 const desktopBackendLayer = DesktopBackendPool.layer.pipe(
   Layer.provideMerge(DesktopAppIdentity.layer),
-  Layer.provideMerge(DesktopBackendConfiguration.layer),
+  Layer.provideMerge(DesktopBackendConfiguration.layerWithStoredApnsCredentials),
   Layer.provideMerge(DesktopWslEnvironment.layer),
   Layer.provideMerge(desktopWindowLayer),
 );

@@ -44,6 +44,7 @@ import { getOrCreateEnvironmentKeyPairFromSecretStore } from "../cloud/environme
 import * as ServerEnvironment from "../environment/ServerEnvironment.ts";
 import * as OrchestrationEngine from "../orchestration/Services/OrchestrationEngine.ts";
 import * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
+import * as DirectAgentNotifications from "../notifications/DirectAgentNotifications.ts";
 
 export class AgentAwarenessRelay extends Context.Service<
   AgentAwarenessRelay,
@@ -294,6 +295,7 @@ export const make = Effect.gen(function* () {
   const serverEnvironment = yield* ServerEnvironment.ServerEnvironment;
   const snapshotQuery = yield* ProjectionSnapshotQuery.ProjectionSnapshotQuery;
   const orchestrationEngine = yield* OrchestrationEngine.OrchestrationEngineService;
+  const directNotifications = yield* DirectAgentNotifications.DirectAgentNotifications;
   const crypto = yield* Crypto.Crypto;
   const cloudLinkKeyPair = yield* getOrCreateEnvironmentKeyPairFromSecretStore(secrets);
   const activeSnapshotPublishedRef = yield* Ref.make(false);
@@ -341,6 +343,22 @@ export const make = Effect.gen(function* () {
   let schedulePublishConfirm: (threadId: ThreadId) => Effect.Effect<void> = () => Effect.void;
 
   const publishThreadUnsafe = Effect.fn("publishThreadUnsafe")(function* (threadId: ThreadId) {
+    // Project the provider-neutral state once, then fan it out to every
+    // configured sink. This keeps transition filtering and redaction shared
+    // between hosted relay publishing and direct APNs delivery.
+    const environmentId = yield* serverEnvironment.getEnvironmentId;
+    const thread = yield* snapshotQuery.getThreadShellById(threadId);
+    const project = Option.isSome(thread)
+      ? yield* snapshotQuery.getProjectShellById(thread.value.projectId)
+      : Option.none<OrchestrationProjectShell>();
+    const snapshot = resolveAgentAwarenessRelayPublishSnapshot({
+      environmentId,
+      threadId,
+      thread,
+      project,
+    });
+    yield* directNotifications.projectThreadState({ threadId, state: snapshot.state });
+
     const publishAgentActivity = yield* readPublishAgentActivityEnabled.pipe(
       Effect.orElseSucceed(() => false),
     );
@@ -358,7 +376,6 @@ export const make = Effect.gen(function* () {
       return;
     }
     const relayClient = yield* makeRelayClient(relayConfig);
-    const environmentId = yield* serverEnvironment.getEnvironmentId;
 
     const publishState = (input: {
       readonly projectId: string | null;
@@ -403,16 +420,6 @@ export const make = Effect.gen(function* () {
         });
       });
 
-    const thread = yield* snapshotQuery.getThreadShellById(threadId);
-    const project = Option.isSome(thread)
-      ? yield* snapshotQuery.getProjectShellById(thread.value.projectId)
-      : Option.none<OrchestrationProjectShell>();
-    const snapshot = resolveAgentAwarenessRelayPublishSnapshot({
-      environmentId,
-      threadId,
-      thread,
-      project,
-    });
     const publishIdentity = agentAwarenessPublishIdentity(snapshot.state);
     const publishedStateByThread = yield* Ref.get(publishedStateByThreadRef);
     if (publishedStateByThread.get(threadId) === publishIdentity) {
@@ -576,6 +583,7 @@ export const make = Effect.gen(function* () {
 
   const start: AgentAwarenessRelay["Service"]["start"] = Effect.fn("AgentAwarenessRelay.start")(
     function* () {
+      yield* directNotifications.start;
       const [relayConfig, publishEnabled] = yield* Effect.all([
         readRelayConfig.pipe(Effect.orElseSucceed(() => null)),
         readPublishAgentActivityEnabled.pipe(Effect.orElseSucceed(() => false)),
@@ -636,4 +644,22 @@ export const make = Effect.gen(function* () {
   });
 });
 
-export const layer = Layer.effect(AgentAwarenessRelay, make);
+const noDirectNotifications = DirectAgentNotifications.DirectAgentNotifications.of({
+  supported: false,
+  hostedRelayActive: Effect.succeed(false),
+  status: () => Effect.die("Direct notification status is unavailable in the relay-only layer."),
+  register: () =>
+    Effect.die("Direct notification registration is unavailable in the relay-only layer."),
+  unregister: () => Effect.succeed(false),
+  test: () => Effect.succeed(false),
+  projectThreadState: () => Effect.void,
+  drain: Effect.void,
+  start: Effect.void,
+});
+
+export const layerWithDirectNotifications = Layer.effect(AgentAwarenessRelay, make);
+export const layer = layerWithDirectNotifications.pipe(
+  Layer.provide(
+    Layer.succeed(DirectAgentNotifications.DirectAgentNotifications, noDirectNotifications),
+  ),
+);

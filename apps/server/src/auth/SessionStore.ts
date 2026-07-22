@@ -645,6 +645,9 @@ export const make = Effect.gen(function* () {
         method: claims.method,
         client,
         expiresAt: expiresAt,
+        // The database is authoritative so narrowly scoped migrations (for
+        // example mobile notification management) take effect without
+        // invalidating an otherwise active bearer token.
         scopes: claims.scopes,
         ...(claims.jkt ? { proofKeyThumbprint: claims.jkt } : {}),
       } satisfies IssuedSession;
@@ -707,7 +710,7 @@ export const make = Effect.gen(function* () {
         client: toClientMetadata(row.value.client),
         expiresAt: expiresAt.value,
         subject: claims.sub,
-        scopes: claims.scopes,
+        scopes: row.value.scopes,
         ...(claims.jkt ? { proofKeyThumbprint: claims.jkt } : {}),
       } satisfies VerifiedSession;
     },

@@ -2,6 +2,14 @@ import * as Schema from "effect/Schema";
 
 import { PortSchema } from "./baseSchemas.ts";
 
+export const DesktopApnsBootstrapCredentials = Schema.Struct({
+  teamId: Schema.String,
+  keyId: Schema.String,
+  bundleId: Schema.Literal("com.goncalloramos.t3code.mobile"),
+  privateKey: Schema.String,
+});
+export type DesktopApnsBootstrapCredentials = typeof DesktopApnsBootstrapCredentials.Type;
+
 export const DesktopBackendBootstrap = Schema.Struct({
   mode: Schema.Literal("desktop"),
   noBrowser: Schema.Boolean,
@@ -16,6 +24,7 @@ export const DesktopBackendBootstrap = Schema.Struct({
   tailscaleServePort: PortSchema,
   otlpTracesUrl: Schema.optional(Schema.String),
   otlpMetricsUrl: Schema.optional(Schema.String),
+  apnsCredentials: Schema.optional(DesktopApnsBootstrapCredentials),
 });
 
 export type DesktopBackendBootstrap = typeof DesktopBackendBootstrap.Type;
