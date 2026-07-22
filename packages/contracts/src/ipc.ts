@@ -1026,6 +1026,12 @@ export interface DesktopBridge {
   // The primary backend is identified by id === PRIMARY_LOCAL_ENVIRONMENT_ID.
   getLocalEnvironmentBootstraps: () => readonly DesktopEnvironmentBootstrap[];
   getLocalEnvironmentBearerToken: () => Promise<string>;
+  getApnsConfigurationStatus: () => Promise<DesktopApnsConfigurationStatus>;
+  importApnsCredentials: (
+    input: DesktopApnsCredentialImportInput,
+  ) => Promise<DesktopApnsConfigurationStatus>;
+  removeApnsCredentials: () => Promise<DesktopApnsConfigurationStatus>;
+  restartPrimaryBackendForApns: () => Promise<boolean>;
   getClientSettings: () => Promise<ClientSettings | null>;
   setClientSettings: (settings: ClientSettings) => Promise<void>;
   getConnectionCatalog?: () => Promise<string | null>;
@@ -1093,6 +1099,23 @@ export interface DesktopBridge {
    */
   preview?: DesktopPreviewBridge;
 }
+
+export const DesktopApnsCredentialImportInputSchema = Schema.Struct({
+  teamId: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(32)),
+  keyId: Schema.String.check(Schema.isTrimmed(), Schema.isNonEmpty(), Schema.isMaxLength(32)),
+});
+export type DesktopApnsCredentialImportInput = typeof DesktopApnsCredentialImportInputSchema.Type;
+
+export const DesktopApnsConfigurationStatusSchema = Schema.Struct({
+  supported: Schema.Boolean,
+  configured: Schema.Boolean,
+  teamId: Schema.NullOr(Schema.String),
+  keyId: Schema.NullOr(Schema.String),
+  bundleId: Schema.Literal("com.goncalloramos.t3code.mobile"),
+  encryptionAvailable: Schema.Boolean,
+  error: Schema.NullOr(Schema.String),
+});
+export type DesktopApnsConfigurationStatus = typeof DesktopApnsConfigurationStatusSchema.Type;
 
 export const DesktopPermissionSettingsTargetSchema = Schema.Literals([
   "notifications",

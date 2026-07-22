@@ -3,11 +3,18 @@ import type { RelayDeviceRegistrationRequest } from "@t3tools/contracts/relay";
 import type { Preferences } from "../../persistence/mobile-preferences";
 import { supportsAgentAwarenessPush } from "./capabilities";
 
-// Development builds are Xcode-signed and receive sandbox APNs tokens;
-// preview and production builds are distribution-signed and use production
-// APNs. The relay routes each device's pushes accordingly.
-export function resolveApsEnvironment(appVariant: unknown): "sandbox" | "production" {
-  return appVariant === "development" ? "sandbox" : "production";
+// Development and local goncalloramos builds are Xcode-signed and receive
+// sandbox APNs tokens. EAS distribution builds inject an explicit production
+// override. The relay must use the environment that signed the binary: APNs
+// tokens cannot be used interchangeably between its two endpoints.
+export function resolveApsEnvironment(
+  appVariant: unknown,
+  configuredEnvironment?: unknown,
+): "sandbox" | "production" {
+  if (configuredEnvironment === "sandbox" || configuredEnvironment === "production") {
+    return configuredEnvironment;
+  }
+  return appVariant === "development" || appVariant === "goncalloramos" ? "sandbox" : "production";
 }
 
 export function makeRelayDeviceRegistrationRequest(input: {
@@ -36,11 +43,14 @@ export function makeRelayDeviceRegistrationRequest(input: {
     ...(input.pushToStartToken ? { pushToStartToken: input.pushToStartToken } : {}),
     preferences: {
       liveActivitiesEnabled,
-      notificationsEnabled: pushAvailable && input.notificationsEnabled,
-      notifyOnApproval: true,
-      notifyOnInput: true,
-      notifyOnCompletion: true,
-      notifyOnFailure: true,
+      notificationsEnabled:
+        pushAvailable &&
+        input.notificationsEnabled &&
+        input.preferences.notificationsEnabled !== false,
+      notifyOnApproval: input.preferences.notifyOnApproval !== false,
+      notifyOnInput: input.preferences.notifyOnInput !== false,
+      notifyOnCompletion: input.preferences.notifyOnCompletion !== false,
+      notifyOnFailure: input.preferences.notifyOnFailure !== false,
     },
   };
 }

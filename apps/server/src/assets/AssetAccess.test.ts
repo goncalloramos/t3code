@@ -25,6 +25,41 @@ const testLayer = Layer.mergeAll(
 ).pipe(Layer.provideMerge(NodeServices.layer));
 
 describe("AssetAccess", () => {
+  it.effect("serves only the exact tool image path authorized by a thread activity", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const path = yield* Path.Path;
+      const directory = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-tool-image-",
+      });
+      const imagePath = path.join(directory, "render.png");
+      yield* fileSystem.writeFileString(imagePath, "image-bytes");
+      const canonicalImagePath = yield* fileSystem.realPath(imagePath);
+      const resource = {
+        _tag: "tool-image" as const,
+        threadId: ThreadId.make("thread-1"),
+        path: imagePath,
+      };
+
+      const unauthorized = yield* issueAssetUrl({ resource }).pipe(Effect.flip);
+      expect(unauthorized).toMatchObject({ _tag: "AssetToolImageNotAuthorizedError" });
+
+      const result = yield* issueAssetUrl({
+        resource,
+        authorizedToolImagePath: imagePath,
+      });
+      const suffix = result.relativeUrl.slice(`${ASSET_ROUTE_PREFIX}/`.length);
+      const separatorIndex = suffix.indexOf("/");
+      const token = suffix.slice(0, separatorIndex);
+
+      expect(yield* resolveAsset(token, "render.png")).toEqual({
+        kind: "file",
+        path: canonicalImagePath,
+      });
+      expect(yield* resolveAsset(token, "other.png")).toBeNull();
+    }).pipe(Effect.provide(testLayer)),
+  );
+
   it.effect("issues workspace URLs that resolve the entry file and sibling assets", () =>
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;

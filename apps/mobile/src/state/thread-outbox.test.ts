@@ -92,6 +92,10 @@ describe("thread outbox", () => {
       },
       runtimeMode: "approval-required",
       interactionMode: "plan",
+      sourceProposedPlan: {
+        threadId: ThreadId.make("thread-plan-source"),
+        planId: "plan-1",
+      },
     } satisfies QueuedThreadMessage;
 
     expect(decodeQueuedThreadMessage(encodeQueuedThreadMessage(selectedMessage))).toEqual(

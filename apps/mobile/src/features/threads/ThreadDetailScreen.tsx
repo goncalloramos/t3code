@@ -1,4 +1,5 @@
 import { type EnvironmentConnectionPhase } from "@t3tools/client-runtime/connection";
+import { proposedPlanTitle } from "@t3tools/client-runtime/proposed-plan";
 import type { EnvironmentThreadStatus } from "@t3tools/client-runtime/state/threads";
 import { useKeyboardChatComposerInset, useKeyboardScrollToEnd } from "@legendapp/list/keyboard";
 import type { LegendListRef } from "@legendapp/list/react-native";
@@ -7,6 +8,7 @@ import type {
   EnvironmentId,
   MessageId,
   ModelSelection,
+  OrchestrationProposedPlan,
   OrchestrationThreadShell,
   ProviderApprovalDecision,
   ProviderInteractionMode,
@@ -16,8 +18,17 @@ import type {
 } from "@t3tools/contracts";
 import { formatElapsed } from "@t3tools/shared/orchestrationTiming";
 import * as Haptics from "expo-haptics";
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { Platform, View, type GestureResponderEvent } from "react-native";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { KeyboardAvoidingView, Platform, View, type GestureResponderEvent } from "react-native";
 import { KeyboardController, KeyboardStickyView } from "react-native-keyboard-controller";
 import Animated, { FadeInDown, FadeOut, LinearTransition } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -36,6 +47,7 @@ import type {
 } from "../../lib/threadActivity";
 import { PendingApprovalCard } from "./PendingApprovalCard";
 import { PendingUserInputCard } from "./PendingUserInputCard";
+import { PlanReadyActionsCard } from "./PlanReadyActionsCard";
 import {
   COMPOSER_COLLAPSED_CHROME,
   COMPOSER_EXPANDED_CHROME,
@@ -56,8 +68,11 @@ export interface ThreadDetailScreenProps {
   readonly respondingApprovalId: ApprovalRequestId | null;
   readonly activePendingUserInput: PendingUserInput | null;
   readonly activePendingUserInputDrafts: Record<string, PendingUserInputDraftAnswer>;
-  readonly activePendingUserInputAnswers: Record<string, string> | null;
+  readonly activePendingUserInputAnswers: Record<string, string | string[]> | null;
   readonly respondingUserInputId: ApprovalRequestId | null;
+  readonly activeProposedPlan: OrchestrationProposedPlan | null;
+  readonly planActionsDisabled: boolean;
+  readonly implementingPlanTarget: "here" | "new-thread" | null;
   readonly draftMessage: string;
   readonly draftAttachments: ReadonlyArray<DraftComposerImageAttachment>;
   readonly connectionStateLabel: EnvironmentConnectionPhase;
@@ -98,6 +113,8 @@ export interface ThreadDetailScreenProps {
     customAnswer: string,
   ) => void;
   readonly onSubmitUserInput: () => Promise<unknown>;
+  readonly onImplementPlanHere: () => void;
+  readonly onImplementPlanInNewThread: () => void;
   readonly showContent?: boolean;
 }
 
@@ -176,6 +193,24 @@ function useStreamingHaptics(threadId: ThreadId, feed: ReadonlyArray<ThreadFeedE
 // overlay). Matches the rendered pill: pt-2 + pb-2 (16) wrapping a bordered
 // px-3/py-2 row (~36), so ~52 — keep it in sync with WorkingDurationPill.
 const WORKING_INDICATOR_HEIGHT = 52;
+
+function ThreadComposerKeyboardDock(props: { readonly children: ReactNode }) {
+  const dockStyle = { position: "absolute", bottom: 0, left: 0, right: 0 } as const;
+
+  if (Platform.OS === "ios") {
+    return (
+      <KeyboardAvoidingView behavior="position" style={dockStyle}>
+        {props.children}
+      </KeyboardAvoidingView>
+    );
+  }
+
+  return (
+    <KeyboardStickyView style={dockStyle} offset={{ closed: 0, opened: 0 }}>
+      {props.children}
+    </KeyboardStickyView>
+  );
+}
 
 const WorkingDurationPill = memo(function WorkingDurationPill(props: {
   readonly startedAt: string;
@@ -422,12 +457,10 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
         <View className="flex-1" />
       )}
 
-      {/* Floating composer — sticks to keyboard via KeyboardStickyView */}
+      {/* Floating composer — iOS measures its true window position before
+          avoiding the keyboard; Android retains the native sticky animation. */}
       {showContent ? (
-        <KeyboardStickyView
-          style={{ position: "absolute", bottom: 0, left: 0, right: 0 }}
-          offset={{ closed: 0, opened: 0 }}
-        >
+        <ThreadComposerKeyboardDock>
           {/* The working pill has a matching real spacer in ThreadFeed so a
               newly appearing pill moves the chat above it. Only the composer
               and approval cards participate in the native keyboard inset. */}
@@ -443,7 +476,9 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
             ) : null}
 
             <View ref={composerOverlayRef} onLayout={onComposerLayout} className="w-full">
-              {props.activePendingApproval || props.activePendingUserInput ? (
+              {props.activePendingApproval ||
+              props.activePendingUserInput ||
+              props.activeProposedPlan ? (
                 <Animated.View
                   className="w-full shrink-0 self-center gap-3 px-4 pb-3"
                   entering={FadeInDown.duration(220)}
@@ -467,6 +502,19 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
                       onSelectOption={props.onSelectUserInputOption}
                       onChangeCustomAnswer={props.onChangeUserInputCustomAnswer}
                       onSubmit={props.onSubmitUserInput}
+                    />
+                  ) : null}
+                  {!props.activePendingApproval &&
+                  !props.activePendingUserInput &&
+                  props.activeProposedPlan ? (
+                    <PlanReadyActionsCard
+                      title={
+                        proposedPlanTitle(props.activeProposedPlan.planMarkdown) ?? "Proposed plan"
+                      }
+                      disabled={props.planActionsDisabled}
+                      implementingTarget={props.implementingPlanTarget}
+                      onImplementHere={props.onImplementPlanHere}
+                      onImplementInNewThread={props.onImplementPlanInNewThread}
                     />
                   ) : null}
                 </Animated.View>
@@ -503,7 +551,7 @@ export const ThreadDetailScreen = memo(function ThreadDetailScreen(props: Thread
               />
             </View>
           </View>
-        </KeyboardStickyView>
+        </ThreadComposerKeyboardDock>
       ) : null}
     </View>
   );

@@ -8,8 +8,8 @@ import Constants from "expo-constants";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import * as Layer from "effect/Layer";
-import { FetchHttpClient } from "effect/unstable/http";
 import { ManagedRelay } from "@t3tools/client-runtime/relay";
+import { remoteHttpClientLayer } from "@t3tools/client-runtime/rpc";
 
 import type { EnvironmentId } from "@t3tools/contracts";
 import { verifyDpopProof } from "@t3tools/shared/dpop";
@@ -184,7 +184,12 @@ function savedConnection(): SavedRemoteConnection {
 }
 
 const relayTestLayer = managedRelayClientLayer("https://relay.example.test").pipe(
-  Layer.provide(Layer.mergeAll(FetchHttpClient.layer, cryptoLayer)),
+  Layer.provide(
+    Layer.mergeAll(
+      remoteHttpClientLayer((input, init) => globalThis.fetch(input, init)),
+      cryptoLayer,
+    ),
+  ),
 );
 
 const runBackgroundOperations = Effect.fn("TestRemoteRegistration.runBackgroundOperations")(
@@ -215,6 +220,22 @@ describe("makeRelayDeviceRegistrationRequest", () => {
   beforeEach(() => {
     vi.unstubAllGlobals();
     vi.stubGlobal("__DEV__", false);
+    vi.stubGlobal("fetch", (request: RequestInfo | URL) => {
+      const url = request instanceof Request ? request.url : String(request);
+      return Promise.resolve(
+        Response.json(
+          url.endsWith("/v1/client/dpop-token")
+            ? {
+                access_token: "relay-dpop-token",
+                issued_token_type: "urn:ietf:params:oauth:token-type:access_token",
+                token_type: "DPoP",
+                expires_in: 300,
+                scope: "mobile:registration",
+              }
+            : { ok: true },
+        ),
+      );
+    });
     secureStore.clear();
     backgroundRuntime.pending.length = 0;
     Constants.expoConfig!.extra = {};
@@ -280,11 +301,13 @@ describe("makeRelayDeviceRegistrationRequest", () => {
     });
   });
 
-  it("routes development builds to the APNs sandbox", () => {
+  it("routes locally signed builds to the APNs sandbox and honors distribution overrides", () => {
     expect(resolveApsEnvironment("development")).toBe("sandbox");
+    expect(resolveApsEnvironment("goncalloramos")).toBe("sandbox");
     expect(resolveApsEnvironment("preview")).toBe("production");
     expect(resolveApsEnvironment("production")).toBe("production");
     expect(resolveApsEnvironment(undefined)).toBe("production");
+    expect(resolveApsEnvironment("goncalloramos", "production")).toBe("production");
   });
 
   it("disables push features in Personal Team relay registrations", () => {

@@ -28,7 +28,13 @@ import {
   getAgentAwarenessRegistrationStatus,
   refreshAgentAwarenessRegistration,
   subscribeAgentAwarenessRegistrationStatus,
+  updateAgentAwarenessRegistrationPreferences,
 } from "../agent-awareness/remoteRegistration";
+import {
+  getDirectNotificationEnvironmentStates,
+  subscribeDirectNotificationEnvironmentStates,
+  type DirectNotificationEnvironmentState,
+} from "../agent-awareness/directRegistration";
 import { refreshManagedRelayEnvironments } from "../cloud/managedRelayState";
 import { useClerkSettingsSheetDetent } from "../cloud/ClerkSettingsSheetDetent";
 import { hasCloudPublicConfig, resolveRelayClerkTokenOptions } from "../cloud/publicConfig";
@@ -119,6 +125,8 @@ function LocalSettingsRouteScreen() {
           />
         </SettingsSection>
 
+        <LocalDeviceNotificationsSettingsSection environmentCount={environmentCount} />
+
         <SettingsSection title="Appearance">
           <SettingsRow icon="paintbrush" label="Appearance" target="SettingsAppearance" />
         </SettingsSection>
@@ -128,6 +136,127 @@ function LocalSettingsRouteScreen() {
         <AppSettingsSection />
       </ScrollView>
     </View>
+  );
+}
+
+const directNotificationStateLabel = (state: DirectNotificationEnvironmentState): string => {
+  switch (state.state) {
+    case "checking":
+      return "Checking";
+    case "unsupported":
+      return "Not supported";
+    case "unreachable":
+      return "Unreachable";
+    case "credentials-missing":
+      return "Mac setup required";
+    case "hosted-relay-active":
+      return "T3 Connect active";
+    case "not-registered":
+      return "Not registered";
+    case "registered":
+      return "Registered";
+    case "delivery-failed":
+      return "Delivery failed";
+  }
+};
+
+function useDirectNotificationStates() {
+  return useSyncExternalStore(
+    subscribeDirectNotificationEnvironmentStates,
+    getDirectNotificationEnvironmentStates,
+    () => [] as ReadonlyArray<DirectNotificationEnvironmentState>,
+  );
+}
+
+function DirectNotificationEnvironmentRows() {
+  const states = useDirectNotificationStates();
+  return states.map((environment) => (
+    <SettingsRow
+      disabled
+      icon="desktopcomputer"
+      key={environment.environmentId}
+      label={environment.label}
+      value={directNotificationStateLabel(environment)}
+    />
+  ));
+}
+
+function LocalDeviceNotificationsSettingsSection(props: { readonly environmentCount: number }) {
+  const preferencesResult = useAtomValue(mobilePreferencesAtom);
+  const savePreferences = useAtomSet(updateMobilePreferencesAtom);
+  const states = useDirectNotificationStates();
+  const [permission, setPermission] = useState<NotificationStatus>("checking");
+  const preferencesEnabled = AsyncResult.isSuccess(preferencesResult)
+    ? preferencesResult.value.notificationsEnabled !== false
+    : true;
+  const capable = states.some((state) => state.state !== "unsupported");
+  const registered = states.some((state) => state.state === "registered");
+
+  const refreshPermission = useCallback(async () => {
+    if (Platform.OS !== "ios") {
+      setPermission("unsupported");
+      return;
+    }
+    const result = await settlePromise(() => Notifications.getPermissionsAsync());
+    setPermission(result._tag === "Success" && result.value.granted ? "enabled" : "disabled");
+  }, []);
+
+  useEffect(() => {
+    void refreshPermission();
+  }, [refreshPermission]);
+
+  const changeEnabled = useCallback(
+    (enabled: boolean) => {
+      void (async () => {
+        if (!enabled) {
+          savePreferences({ notificationsEnabled: false });
+          await runtime.runPromise(
+            updateAgentAwarenessRegistrationPreferences({ notificationsEnabled: false }),
+          );
+          return;
+        }
+        const result = await runtime.runPromise(requestAgentNotificationPermission);
+        if (result.type === "granted") {
+          savePreferences({ notificationsEnabled: true });
+          await runtime.runPromise(
+            updateAgentAwarenessRegistrationPreferences({ notificationsEnabled: true }),
+          );
+          setPermission("enabled");
+          return;
+        }
+        setPermission(result.type === "unsupported" ? "unsupported" : "disabled");
+        if (result.type === "denied" && !result.canAskAgain) {
+          Alert.alert(
+            "Notifications disabled",
+            "Open iPhone Settings to allow notifications for T3 Code.",
+            [
+              { text: "Cancel", style: "cancel" },
+              { text: "Open Settings", onPress: () => void Linking.openSettings() },
+            ],
+          );
+        }
+      })().catch((error: unknown) => {
+        Alert.alert(
+          "Notifications unavailable",
+          error instanceof Error ? error.message : "Registration will retry automatically.",
+        );
+      });
+    },
+    [savePreferences],
+  );
+
+  if (props.environmentCount === 0 || states.length === 0 || !capable) return null;
+  return (
+    <SettingsSection title="Device Notifications">
+      <SettingsSwitchRow
+        disabled={permission === "checking" || permission === "unsupported"}
+        icon="bell.badge"
+        label="Notifications"
+        value={permission === "enabled" && preferencesEnabled && registered}
+        onValueChange={changeEnabled}
+      />
+      <DirectNotificationEnvironmentRows />
+    </SettingsSection>
   );
 }
 
@@ -146,6 +275,9 @@ function ConfiguredSettingsRouteScreen() {
   const deviceRegistered = useDeviceRegistered();
   const liveActivitiesPreferenceEnabled = AsyncResult.isSuccess(preferencesResult)
     ? preferencesResult.value.liveActivitiesEnabled !== false
+    : true;
+  const notificationsPreferenceEnabled = AsyncResult.isSuccess(preferencesResult)
+    ? preferencesResult.value.notificationsEnabled !== false
     : true;
 
   const connections = useMemo(() => Object.values(savedConnectionsById), [savedConnectionsById]);
@@ -218,6 +350,10 @@ function ConfiguredSettingsRouteScreen() {
       return;
     }
     if (result.value.type === "granted") {
+      savePreferences({ notificationsEnabled: true });
+      void runtime.runPromise(
+        updateAgentAwarenessRegistrationPreferences({ notificationsEnabled: true }),
+      );
       setNotificationStatus("enabled");
       // Permission alone is not enough: the switch stays off until the relay
       // registration succeeds, so tell the user the truth about which happened.
@@ -255,7 +391,7 @@ function ConfiguredSettingsRouteScreen() {
         { text: "Open Settings", onPress: () => void Linking.openSettings() },
       ],
     );
-  }, []);
+  }, [savePreferences]);
 
   const promptSignIn = useCallback(() => {
     Alert.alert(
@@ -351,17 +487,12 @@ function ConfiguredSettingsRouteScreen() {
         void requestNotifications();
         return;
       }
-
-      Alert.alert(
-        "Disable notifications",
-        "Notification permission is controlled by iOS. Open Settings to disable notifications for T3 Code.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Open Settings", onPress: () => void Linking.openSettings() },
-        ],
+      savePreferences({ notificationsEnabled: false });
+      void runtime.runPromise(
+        updateAgentAwarenessRegistrationPreferences({ notificationsEnabled: false }),
       );
     },
-    [requestNotifications],
+    [requestNotifications, savePreferences],
   );
 
   const handleLiveActivitiesChange = useCallback(
@@ -478,10 +609,14 @@ function ConfiguredSettingsRouteScreen() {
             // relay; otherwise notifications cannot be delivered regardless of
             // the local iOS permission.
             value={
-              agentAwarenessPushAvailable && notificationStatus === "enabled" && deviceRegistered
+              agentAwarenessPushAvailable &&
+              notificationStatus === "enabled" &&
+              deviceRegistered &&
+              notificationsPreferenceEnabled
             }
             onValueChange={handleDeviceNotificationsChange}
           />
+          <DirectNotificationEnvironmentRows />
           <SettingsSwitchRow
             disabled={
               !agentAwarenessPushAvailable ||

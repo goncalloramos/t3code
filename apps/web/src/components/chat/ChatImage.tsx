@@ -12,6 +12,7 @@ interface ChatImageProps {
   readonly threadRef: ScopedThreadRef | undefined;
   readonly className?: string;
   readonly onExpand?: ((resolvedSource: string) => void) | undefined;
+  readonly sourceKind?: "workspace-file" | "tool-image" | undefined;
 }
 
 interface ResolvedImageProps {
@@ -55,7 +56,7 @@ const ResolvedImage = memo(function ResolvedImage(props: ResolvedImageProps) {
   );
 });
 
-function WorkspaceChatImage(
+function FileBackedChatImage(
   props: Omit<ChatImageProps, "source" | "threadRef"> & {
     readonly path: string;
     readonly threadRef: ScopedThreadRef;
@@ -63,7 +64,7 @@ function WorkspaceChatImage(
 ) {
   const resource = useMemo(
     () => ({
-      _tag: "workspace-file" as const,
+      _tag: props.sourceKind ?? ("workspace-file" as const),
       threadId: props.threadRef.threadId,
       path: props.path,
     }),
@@ -99,5 +100,5 @@ export const ChatImage = memo(function ChatImage(props: ChatImageProps) {
   if (resolved.kind === "direct") {
     return <ResolvedImage {...props} source={resolved.url} />;
   }
-  return <WorkspaceChatImage {...props} path={resolved.path} threadRef={resolved.threadRef} />;
+  return <FileBackedChatImage {...props} path={resolved.path} threadRef={resolved.threadRef} />;
 });

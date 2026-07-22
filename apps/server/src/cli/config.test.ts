@@ -272,6 +272,12 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
           tailscaleServePort: 443,
           otlpTracesUrl: "http://localhost:4318/v1/traces",
           otlpMetricsUrl: "http://localhost:4318/v1/metrics",
+          apnsCredentials: {
+            teamId: "TEAM123456",
+            keyId: "KEY1234567",
+            bundleId: "com.goncalloramos.t3code.mobile",
+            privateKey: "private-key-material",
+          },
         }),
       );
       const derivedPaths = yield* deriveServerPaths(baseDir, undefined);
@@ -327,6 +333,12 @@ it.layer(NodeServices.layer)("cli config resolution", (it) => {
         logWebSocketEvents: false,
         tailscaleServeEnabled: false,
         tailscaleServePort: 443,
+        apnsCredentials: {
+          teamId: "TEAM123456",
+          keyId: "KEY1234567",
+          bundleId: "com.goncalloramos.t3code.mobile",
+          privateKey: "private-key-material",
+        },
       });
       assert.equal(join(baseDir, "userdata"), resolved.stateDir);
     }),

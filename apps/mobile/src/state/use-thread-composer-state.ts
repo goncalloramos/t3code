@@ -1,5 +1,5 @@
 import { useAtomValue } from "@effect/atom-react";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import {
   CommandId,
@@ -11,6 +11,11 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import { safeErrorLogAttributes } from "@t3tools/client-runtime/errors";
+import {
+  buildPlanImplementationPrompt,
+  findActionableProposedPlan,
+  sourceProposedPlanReference,
+} from "@t3tools/client-runtime/proposed-plan";
 import { deriveActiveWorkStartedAt } from "@t3tools/shared/orchestrationTiming";
 
 import { makeQueuedMessageMetadata } from "../lib/commandMetadata";
@@ -77,6 +82,8 @@ export function useThreadComposerState() {
   const selectedThreadDetail = useSelectedThreadDetail();
   const composerDrafts = useAtomValue(composerDraftsAtom);
   const queuedMessagesByThreadKey = useThreadOutboxMessages();
+  const [implementingPlanHere, setImplementingPlanHere] = useState(false);
+  const implementingPlanHereRef = useRef(false);
 
   useEffect(() => {
     ensureComposerDraftsLoaded();
@@ -102,6 +109,17 @@ export function useThreadComposerState() {
   const modelSelection = selectedDraft?.modelSelection ?? selectedThread?.modelSelection ?? null;
   const runtimeMode = selectedDraft?.runtimeMode ?? selectedThread?.runtimeMode ?? null;
   const interactionMode = selectedDraft?.interactionMode ?? selectedThread?.interactionMode ?? null;
+  const activeProposedPlan = useMemo(
+    () =>
+      selectedThreadDetail && interactionMode === "plan"
+        ? findActionableProposedPlan({
+            proposedPlans: selectedThreadDetail.proposedPlans,
+            latestTurn: selectedThreadDetail.latestTurn,
+            session: selectedThreadDetail.session,
+          })
+        : null,
+    [interactionMode, selectedThreadDetail],
+  );
 
   const selectedThreadSessionActivity = useMemo(() => {
     const selectedThread = selectedThreadDetail ?? selectedThreadShell;
@@ -289,6 +307,65 @@ export function useThreadComposerState() {
     [selectedThreadKey],
   );
 
+  const onImplementPlanHere = useCallback(async () => {
+    if (
+      !selectedThreadShell ||
+      !selectedThreadKey ||
+      !activeProposedPlan ||
+      implementingPlanHereRef.current ||
+      activeThreadBusy ||
+      selectedThreadQueueCount > 0 ||
+      draftMessage.trim().length > 0 ||
+      draftAttachments.length > 0
+    ) {
+      return null;
+    }
+
+    const thread = selectedThreadDetail ?? selectedThreadShell;
+    const metadata = makeQueuedMessageMetadata();
+    const messageId = MessageId.make(metadata.messageId);
+    implementingPlanHereRef.current = true;
+    setImplementingPlanHere(true);
+    try {
+      await enqueueThreadOutboxMessage({
+        environmentId: selectedThreadShell.environmentId,
+        threadId: selectedThreadShell.id,
+        messageId,
+        commandId: CommandId.make(metadata.commandId),
+        text: buildPlanImplementationPrompt(activeProposedPlan.planMarkdown),
+        attachments: [],
+        modelSelection: modelSelection ?? thread.modelSelection,
+        runtimeMode: runtimeMode ?? thread.runtimeMode,
+        interactionMode: "default",
+        sourceProposedPlan: sourceProposedPlanReference(selectedThreadShell.id, activeProposedPlan),
+        createdAt: metadata.createdAt,
+      });
+      clearComposerDraftContent(selectedThreadKey);
+      updateComposerDraftSettings(selectedThreadKey, { interactionMode: "default" });
+      setPendingConnectionError(null);
+      return messageId;
+    } catch (error) {
+      setPendingConnectionError(
+        error instanceof Error ? error.message : "The plan could not be queued for implementation.",
+      );
+      return null;
+    } finally {
+      implementingPlanHereRef.current = false;
+      setImplementingPlanHere(false);
+    }
+  }, [
+    activeProposedPlan,
+    activeThreadBusy,
+    draftAttachments.length,
+    draftMessage,
+    modelSelection,
+    runtimeMode,
+    selectedThreadDetail,
+    selectedThreadKey,
+    selectedThreadQueueCount,
+    selectedThreadShell,
+  ]);
+
   return {
     selectedThreadFeed,
     selectedThreadQueueCount,
@@ -298,6 +375,8 @@ export function useThreadComposerState() {
     modelSelection,
     runtimeMode,
     interactionMode,
+    activeProposedPlan,
+    implementingPlanHere,
     activeThreadBusy,
     onChangeDraftMessage,
     onPickDraftImages,
@@ -305,6 +384,7 @@ export function useThreadComposerState() {
     onNativePasteImages,
     onRemoveDraftImage,
     onSendMessage,
+    onImplementPlanHere,
     onUpdateModelSelection,
     onUpdateRuntimeMode,
     onUpdateInteractionMode,

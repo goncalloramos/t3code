@@ -8,17 +8,36 @@ import {
   FILESYSTEM_RPC_METHODS,
   filesystemBrowseFailureContext,
   makeFilesystemRpcHandlers,
+  threadAuthorizesToolImage,
 } from "./filesystem.ts";
 
 const observeEffect: RpcHandlerObservers["observeEffect"] = (_method, effect) => effect;
 
 describe("filesystem RPC handlers", () => {
+  it("authorizes only image paths recorded in the thread's tool activity", () => {
+    const thread = {
+      activities: [
+        {
+          payload: {
+            data: {
+              item: { type: "imageView", path: "/tmp/render.png" },
+            },
+          },
+        },
+      ],
+    } as unknown as Parameters<typeof threadAuthorizesToolImage>[0];
+
+    assert.isTrue(threadAuthorizesToolImage(thread, "/tmp/render.png"));
+    assert.isFalse(threadAuthorizesToolImage(thread, "/tmp/private.png"));
+  });
+
   it("registers the existing filesystem method identifiers without additions or omissions", () => {
     const handlers = makeFilesystemRpcHandlers(
       {
         externalLauncher: { launchEditor: () => Effect.never },
         projectionSnapshotQuery: {
           getThreadShellById: () => Effect.succeed(Option.none()),
+          getThreadDetailById: () => Effect.succeed(Option.none()),
           getProjectShellById: () => Effect.succeed(Option.none()),
         },
         workspaceEntries: { browse: () => Effect.never },

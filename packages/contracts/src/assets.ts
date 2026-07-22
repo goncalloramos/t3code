@@ -9,6 +9,10 @@ export const AssetResource = Schema.Union([
     threadId: ThreadId,
     path: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
   }),
+  Schema.TaggedStruct("tool-image", {
+    threadId: ThreadId,
+    path: TrimmedNonEmptyString.check(Schema.isMaxLength(ASSET_PATH_MAX_LENGTH)),
+  }),
   Schema.TaggedStruct("attachment", {
     attachmentId: TrimmedNonEmptyString.check(Schema.isMaxLength(256)),
   }),
@@ -133,6 +137,33 @@ export class AssetAttachmentNotFoundError extends Schema.TaggedErrorClass<AssetA
   }
 }
 
+export class AssetToolImageNotAuthorizedError extends Schema.TaggedErrorClass<AssetToolImageNotAuthorizedError>()(
+  "AssetToolImageNotAuthorizedError",
+  { resource: AssetResource },
+) {
+  override get message(): string {
+    return "Tool image was not authorized by this thread's activity.";
+  }
+}
+
+export class AssetToolImageInspectionError extends Schema.TaggedErrorClass<AssetToolImageInspectionError>()(
+  "AssetToolImageInspectionError",
+  { resource: AssetResource, cause: Schema.Defect() },
+) {
+  override get message(): string {
+    return "Failed to inspect the tool image.";
+  }
+}
+
+export class AssetToolImageNotFoundError extends Schema.TaggedErrorClass<AssetToolImageNotFoundError>()(
+  "AssetToolImageNotFoundError",
+  { resource: AssetResource },
+) {
+  override get message(): string {
+    return "Tool image was not found.";
+  }
+}
+
 export class AssetProjectFaviconResolutionError extends Schema.TaggedErrorClass<AssetProjectFaviconResolutionError>()(
   "AssetProjectFaviconResolutionError",
   {
@@ -190,6 +221,9 @@ export const AssetAccessError = Schema.Union([
   AssetWorkspaceAssetNotFoundError,
   AssetWorkspaceResolutionError,
   AssetAttachmentNotFoundError,
+  AssetToolImageNotAuthorizedError,
+  AssetToolImageInspectionError,
+  AssetToolImageNotFoundError,
   AssetProjectFaviconResolutionError,
   AssetProjectFaviconInspectionError,
   AssetProjectFaviconNotFoundError,

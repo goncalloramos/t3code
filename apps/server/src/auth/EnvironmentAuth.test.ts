@@ -173,6 +173,7 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
         "terminal:operate",
         "review:write",
         "relay:read",
+        "notifications:manage",
         "access:read",
         "access:write",
         "relay:write",

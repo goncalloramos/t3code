@@ -8,8 +8,17 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import * as Option from "effect/Option";
 import { EnvironmentId, ThreadId, type ProjectScript } from "@t3tools/contracts";
+import {
+  buildPlanImplementationPrompt,
+  buildPlanImplementationThreadTitle,
+  sourceProposedPlanReference,
+} from "@t3tools/client-runtime/proposed-plan";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import { projectScriptCwd, projectScriptRuntimeEnv } from "@t3tools/shared/projectScripts";
-import { Platform, ScrollView, View } from "react-native";
+import { Alert, Platform, ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useWorkspaceState } from "../../state/workspace";
 import { useEnvironmentQuery } from "../../state/query";
@@ -25,6 +34,7 @@ import { LoadingScreen } from "../../components/LoadingScreen";
 import { mobileCodexQuotaLabel } from "../../lib/codexQuotaPresentation";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { connectionTone } from "../connection/connectionTone";
+import { armAgentAwarenessLiveActivityForLocalWork } from "../agent-awareness/remoteRegistration";
 
 import {
   useRemoteConnections,
@@ -59,6 +69,8 @@ import { useSelectedThreadRequests } from "../../state/use-selected-thread-reque
 import { useSelectedThreadWorktree } from "../../state/use-selected-thread-worktree";
 import { useThreadComposerState } from "../../state/use-thread-composer-state";
 import { threadEnvironment } from "../../state/threads";
+import { useCreateProjectThread } from "./use-project-actions";
+import { resolveMobilePlanActionsState } from "./mobilePlanActions";
 import { projectThreadContentPresentation } from "./threadContentPresentation";
 import {
   useAdaptiveWorkspaceLayout,
@@ -192,6 +204,7 @@ function ThreadRouteContent(
   const selectedThreadDetail = Option.getOrNull(selectedThreadDetailState.data);
   const { selectedThreadCwd } = useSelectedThreadWorktree();
   const composer = useThreadComposerState();
+  const createProjectThread = useCreateProjectThread();
   const gitState = useSelectedThreadGitState();
   const gitActions = useSelectedThreadGitActions();
   const requests = useSelectedThreadRequests();
@@ -206,6 +219,8 @@ function ThreadRouteContent(
   const [inspectorSelection, setInspectorSelection] = useState<ThreadInspectorSelection | null>(
     () => (props.renderInspector ? { routeThreadIdentity, mode: "route" } : null),
   );
+  const [implementingPlanInNewThread, setImplementingPlanInNewThread] = useState(false);
+  const planActionPressRef = useRef(false);
   const inspectorMode = (() => {
     if (inspectorSelection?.routeThreadIdentity === routeThreadIdentity) {
       if (inspectorSelection.mode === "files" && selectedThreadCwd === null) {
@@ -277,6 +292,112 @@ function ThreadRouteContent(
         : null,
     [composer.interactionMode, composer.modelSelection, composer.runtimeMode, selectedThread],
   );
+  const implementingPlanTarget = composer.implementingPlanHere
+    ? ("here" as const)
+    : implementingPlanInNewThread
+      ? ("new-thread" as const)
+      : null;
+  const planActionsState = resolveMobilePlanActionsState({
+    plan: composer.activeProposedPlan,
+    hasPendingApproval: requests.activePendingApproval !== null,
+    hasPendingUserInput: requests.activePendingUserInput !== null,
+    draftText: composer.draftMessage,
+    attachmentCount: composer.draftAttachments.length,
+    connectionState: routeConnectionState,
+    threadBusy: composer.activeThreadBusy,
+    queueCount: composer.selectedThreadQueueCount,
+    implementing: implementingPlanTarget !== null,
+  });
+  const implementationPlan = planActionsState.plan;
+  const planActionsDisabled = planActionsState.disabled;
+
+  const handleImplementPlanHere = useCallback(() => {
+    if (planActionsDisabled || planActionPressRef.current) return;
+    void (async () => {
+      planActionPressRef.current = true;
+      if (selectedThread) {
+        armAgentAwarenessLiveActivityForLocalWork({
+          threadTitle: selectedThread.title,
+          projectTitle: selectedThreadProject?.title ?? "T3 Code",
+        });
+      }
+      try {
+        const result = await composer.onImplementPlanHere();
+        if (result === null) {
+          Alert.alert(
+            "Could not implement plan",
+            "The implementation turn could not be queued. Check the connection and try again.",
+          );
+        }
+      } finally {
+        planActionPressRef.current = false;
+      }
+    })();
+  }, [composer, planActionsDisabled, selectedThread, selectedThreadProject?.title]);
+
+  const handleImplementPlanInNewThread = useCallback(() => {
+    if (
+      planActionsDisabled ||
+      planActionPressRef.current ||
+      !implementationPlan ||
+      !selectedThread ||
+      !selectedThreadProject
+    ) {
+      return;
+    }
+
+    void (async () => {
+      planActionPressRef.current = true;
+      setImplementingPlanInNewThread(true);
+      armAgentAwarenessLiveActivityForLocalWork({
+        threadTitle: buildPlanImplementationThreadTitle(implementationPlan.planMarkdown),
+        projectTitle: selectedThreadProject.title,
+      });
+      try {
+        const result = await createProjectThread({
+          project: selectedThreadProject,
+          modelSelection: composer.modelSelection ?? selectedThread.modelSelection,
+          envMode: "local",
+          branch: selectedThread.branch,
+          worktreePath: selectedThread.worktreePath,
+          runtimeMode: composer.runtimeMode ?? selectedThread.runtimeMode,
+          interactionMode: "default",
+          initialMessageText: buildPlanImplementationPrompt(implementationPlan.planMarkdown),
+          initialAttachments: [],
+          title: buildPlanImplementationThreadTitle(implementationPlan.planMarkdown),
+          sourceProposedPlan: sourceProposedPlanReference(selectedThread.id, implementationPlan),
+        });
+        if (result._tag === "Failure") {
+          if (!isAtomCommandInterrupted(result)) {
+            const error = squashAtomCommandFailure(result);
+            Alert.alert(
+              "Could not start implementation thread",
+              error instanceof Error ? error.message : "The new thread could not be started.",
+            );
+          }
+          return;
+        }
+        navigation.dispatch(
+          StackActions.push("Thread", {
+            environmentId: String(result.value.environmentId),
+            threadId: String(result.value.threadId),
+          }),
+        );
+      } finally {
+        planActionPressRef.current = false;
+        setImplementingPlanInNewThread(false);
+      }
+    })();
+  }, [
+    composer.modelSelection,
+    composer.runtimeMode,
+    createProjectThread,
+    implementationPlan,
+    navigation,
+    planActionsDisabled,
+    selectedThread,
+    selectedThreadProject,
+  ]);
 
   /* ─── Native header theming ──────────────────────────────────────── */
   const usesNativeHeaderGlass = Platform.OS === "ios";
@@ -768,6 +889,9 @@ function ThreadRouteContent(
           activePendingUserInputDrafts={requests.activePendingUserInputDrafts}
           activePendingUserInputAnswers={requests.activePendingUserInputAnswers}
           respondingUserInputId={requests.respondingUserInputId}
+          activeProposedPlan={implementationPlan}
+          planActionsDisabled={planActionsDisabled}
+          implementingPlanTarget={implementingPlanTarget}
           draftMessage={composer.draftMessage}
           draftAttachments={composer.draftAttachments}
           connectionStateLabel={routeConnectionState}
@@ -795,6 +919,8 @@ function ThreadRouteContent(
           onSelectUserInputOption={requests.onSelectUserInputOption}
           onChangeUserInputCustomAnswer={requests.onChangeUserInputCustomAnswer}
           onSubmitUserInput={requests.onSubmitUserInput}
+          onImplementPlanHere={handleImplementPlanHere}
+          onImplementPlanInNewThread={handleImplementPlanInNewThread}
         />
       </View>
     </>

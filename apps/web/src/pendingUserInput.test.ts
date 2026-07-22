@@ -66,7 +66,7 @@ describe("resolvePendingUserInputAnswer", () => {
     ).toEqual(["Server", "Web"]);
   });
 
-  it("clears the preset selection when a custom answer is entered", () => {
+  it("keeps the preset selection available when a custom answer is entered", () => {
     expect(
       setPendingUserInputCustomAnswer(
         {
@@ -76,6 +76,7 @@ describe("resolvePendingUserInputAnswer", () => {
       ),
     ).toEqual({
       customAnswer: "doesn't matter",
+      selectedOptionLabels: ["Server", "Web"],
     });
   });
 });

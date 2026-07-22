@@ -42,6 +42,14 @@ import {
   RelayEnvironmentMintResponse,
   RelayLinkProofRequest,
 } from "./relay.ts";
+import {
+  AgentNotificationDeviceParams,
+  AgentNotificationDeviceRegistration,
+  AgentNotificationEnvironmentStatus,
+  AgentNotificationRegistrationResult,
+  AgentNotificationTestResult,
+  AgentNotificationUnregisterResult,
+} from "./agentNotifications.ts";
 
 const OptionalBearerHeaders = Schema.Struct({
   authorization: Schema.optionalKey(Schema.String),
@@ -84,6 +92,7 @@ export const EnvironmentInternalErrorReason = Schema.Literals([
   "orchestration_snapshot_failed",
   "orchestration_thread_snapshot_failed",
   "orchestration_dispatch_failed",
+  "agent_notifications_failed",
   "internal_error",
 ]);
 export type EnvironmentInternalErrorReason = typeof EnvironmentInternalErrorReason.Type;
@@ -298,6 +307,12 @@ const EnvironmentOrchestrationThreadSnapshotErrors = [
 const EnvironmentOrchestrationDispatchErrors = [
   EnvironmentRequestInvalidError,
   EnvironmentScopeRequiredError,
+  EnvironmentInternalError,
+] as const;
+const EnvironmentAgentNotificationErrors = [
+  EnvironmentScopeRequiredError,
+  EnvironmentHttpConflictError,
+  EnvironmentHttpBadRequestError,
   EnvironmentInternalError,
 ] as const;
 
@@ -550,8 +565,43 @@ export class EnvironmentConnectHttpApi extends HttpApiGroup.make("connect")
     }),
   ) {}
 
+export class EnvironmentAgentNotificationsHttpApi extends HttpApiGroup.make("agentNotifications")
+  .add(
+    HttpApiEndpoint.get("status", "/api/agent-notifications/status", {
+      headers: OptionalBearerHeaders,
+      success: AgentNotificationEnvironmentStatus,
+      error: EnvironmentAgentNotificationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.put("registerDevice", "/api/agent-notifications/devices/:deviceId", {
+      headers: OptionalBearerHeaders,
+      params: AgentNotificationDeviceParams,
+      payload: AgentNotificationDeviceRegistration,
+      success: AgentNotificationRegistrationResult,
+      error: EnvironmentAgentNotificationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.delete("unregisterDevice", "/api/agent-notifications/devices/:deviceId", {
+      headers: OptionalBearerHeaders,
+      params: AgentNotificationDeviceParams,
+      success: AgentNotificationUnregisterResult,
+      error: EnvironmentAgentNotificationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("testDevice", "/api/agent-notifications/devices/:deviceId/test", {
+      headers: OptionalBearerHeaders,
+      params: AgentNotificationDeviceParams,
+      success: AgentNotificationTestResult,
+      error: EnvironmentAgentNotificationErrors,
+    }).middleware(EnvironmentAuthenticatedAuth),
+  ) {}
+
 export class EnvironmentHttpApi extends HttpApi.make("environment")
   .add(EnvironmentMetadataHttpApi)
   .add(EnvironmentAuthHttpApi)
   .add(EnvironmentOrchestrationHttpApi)
+  .add(EnvironmentAgentNotificationsHttpApi)
   .add(EnvironmentConnectHttpApi) {}

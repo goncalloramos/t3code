@@ -2,6 +2,7 @@ import {
   AuthAccessTokenType,
   AuthAccessWriteScope,
   AuthAdministrativeScopes,
+  AuthNotificationsManageScope,
   AuthStandardClientScopes,
   type AuthAccessTokenResult,
   type AuthBrowserSessionResult,
@@ -693,8 +694,16 @@ export const make = Effect.gen(function* () {
         Effect.mapError(toBootstrapExchangeError),
         Effect.flatMap((grant) =>
           Effect.gen(function* () {
-            const grantedScopes = requestedScopes ?? grant.scopes;
-            if (!grantedScopes.every((scope) => grant.scopes.includes(scope))) {
+            // A one-time pairing link is created before the consuming device
+            // identifies itself. Narrowly extend that grant only when the
+            // token exchange is presented as a mobile client.
+            const effectiveGrantScopes: ReadonlyArray<AuthEnvironmentScope> =
+              requestMetadata.deviceType === "mobile" &&
+              !grant.scopes.includes(AuthNotificationsManageScope)
+                ? [...grant.scopes, AuthNotificationsManageScope]
+                : grant.scopes;
+            const grantedScopes = requestedScopes ?? effectiveGrantScopes;
+            if (!grantedScopes.every((scope) => effectiveGrantScopes.includes(scope))) {
               return yield* new ServerAuthScopeNotGrantedError({});
             }
             return yield* sessions

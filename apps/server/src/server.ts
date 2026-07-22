@@ -89,6 +89,9 @@ import {
   persistServerRuntimeState,
 } from "./serverRuntimeState.ts";
 import { orchestrationHttpApiLayer } from "./orchestration/http.ts";
+import { agentNotificationsHttpApiLayer } from "./notifications/http.ts";
+import * as DirectAgentNotifications from "./notifications/DirectAgentNotifications.ts";
+import * as AgentNotifications from "./persistence/AgentNotifications.ts";
 import * as NetService from "@t3tools/shared/Net";
 import * as RelayClient from "@t3tools/shared/relayClient";
 import { disableTailscaleServe, ensureTailscaleServe } from "@t3tools/tailscale";
@@ -162,7 +165,16 @@ const ReactorLayerLive = Layer.empty.pipe(
   Layer.provideMerge(ProviderCommandReactorLive),
   Layer.provideMerge(CheckpointReactorLive),
   Layer.provideMerge(ThreadDeletionReactorLive),
-  Layer.provideMerge(AgentAwarenessRelay.layer.pipe(Layer.provide(ServerSecretStore.layer))),
+  Layer.provideMerge(
+    AgentAwarenessRelay.layerWithDirectNotifications.pipe(
+      Layer.provideMerge(
+        DirectAgentNotifications.layer.pipe(
+          Layer.provide(AgentNotifications.layer.pipe(Layer.provide(SqlitePersistenceLayerLive))),
+        ),
+      ),
+      Layer.provide(ServerSecretStore.layer),
+    ),
+  ),
   Layer.provideMerge(RuntimeReceiptBusLive),
 );
 
@@ -349,6 +361,7 @@ export const makeRoutesLayer = Layer.mergeAll(
       Layer.provide(authHttpApiLayer),
       Layer.provide(connectHttpApiLayer),
       Layer.provide(orchestrationHttpApiLayer),
+      Layer.provide(agentNotificationsHttpApiLayer),
       Layer.provide(serverEnvironmentHttpApiLayer),
       Layer.provide(environmentAuthenticatedAuthLayer),
     ),

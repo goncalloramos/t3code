@@ -15,6 +15,11 @@ const PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
 
 export interface Preferences {
   readonly liveActivitiesEnabled?: boolean;
+  readonly notificationsEnabled?: boolean;
+  readonly notifyOnApproval?: boolean;
+  readonly notifyOnInput?: boolean;
+  readonly notifyOnCompletion?: boolean;
+  readonly notifyOnFailure?: boolean;
   readonly baseFontSize?: number;
   readonly terminalFontSize?: number | null;
   readonly markdownFontSize?: number;
@@ -64,6 +69,11 @@ export class MobilePreferencesStore extends Context.Service<
 function sanitizePreferences(parsed: Preferences): Preferences {
   const preferences: {
     liveActivitiesEnabled?: boolean;
+    notificationsEnabled?: boolean;
+    notifyOnApproval?: boolean;
+    notifyOnInput?: boolean;
+    notifyOnCompletion?: boolean;
+    notifyOnFailure?: boolean;
     baseFontSize?: number;
     terminalFontSize?: number | null;
     markdownFontSize?: number;
@@ -76,6 +86,18 @@ function sanitizePreferences(parsed: Preferences): Preferences {
   if (typeof parsed.liveActivitiesEnabled === "boolean") {
     preferences.liveActivitiesEnabled = parsed.liveActivitiesEnabled;
   }
+  if (typeof parsed.notificationsEnabled === "boolean") {
+    preferences.notificationsEnabled = parsed.notificationsEnabled;
+  }
+  if (typeof parsed.notifyOnApproval === "boolean") {
+    preferences.notifyOnApproval = parsed.notifyOnApproval;
+  }
+  if (typeof parsed.notifyOnInput === "boolean") preferences.notifyOnInput = parsed.notifyOnInput;
+  if (typeof parsed.notifyOnCompletion === "boolean") {
+    preferences.notifyOnCompletion = parsed.notifyOnCompletion;
+  }
+  if (typeof parsed.notifyOnFailure === "boolean")
+    preferences.notifyOnFailure = parsed.notifyOnFailure;
   if (typeof parsed.baseFontSize === "number") preferences.baseFontSize = parsed.baseFontSize;
   if (typeof parsed.terminalFontSize === "number" || parsed.terminalFontSize === null) {
     preferences.terminalFontSize = parsed.terminalFontSize;

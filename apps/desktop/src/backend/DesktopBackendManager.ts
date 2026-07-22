@@ -251,6 +251,11 @@ const initialState: BackendManagerState = {
   nextRunId: 1,
 };
 
+function withoutApnsCredentials(config: DesktopBackendStartConfig): DesktopBackendStartConfig {
+  const { apnsCredentials: _apnsCredentials, ...bootstrap } = config.bootstrap;
+  return { ...config, bootstrap };
+}
+
 const activePid = (active: Option.Option<ActiveBackendRun>): Option.Option<number> =>
   Option.flatMap(active, (run) => run.pid);
 
@@ -475,7 +480,10 @@ export const makeBackendInstance = Effect.fn("makeBackendInstance")(function* (
           ...latest,
           desiredRunning: true,
           ready: false,
-          config: Option.some(config.value),
+          // The decrypted APNs key is needed only while constructing the fd3
+          // bootstrap stream. Never retain it in the renderer-readable/current
+          // configuration snapshot after resolution.
+          config: Option.some(withoutApnsCredentials(config.value)),
           preflightFailureAttempt: resetFatalPreflightCounter ? 0 : latest.preflightFailureAttempt,
         }));
 

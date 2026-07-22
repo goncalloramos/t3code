@@ -4,9 +4,11 @@ import {
   type FilesystemBrowseFailure,
   FilesystemBrowseError,
   WS_METHODS,
+  type OrchestrationThread,
 } from "@t3tools/contracts";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
+import { extractWorkLogImages } from "@t3tools/shared/chatImages";
 
 import { issueAssetUrl } from "../assets/AssetAccess.ts";
 import type * as ProjectionSnapshotQuery from "../orchestration/Services/ProjectionSnapshotQuery.ts";
@@ -16,6 +18,15 @@ import type { RpcHandlerObservers } from "./handlers.ts";
 
 function assertNever(error: never): never {
   throw new Error(`Unhandled filesystem RPC compatibility error: ${String(error)}`);
+}
+
+export function threadAuthorizesToolImage(
+  thread: Pick<OrchestrationThread, "activities">,
+  imagePath: string,
+): boolean {
+  return thread.activities.some((activity) =>
+    extractWorkLogImages(activity.payload).some((image) => image.source === imagePath),
+  );
 }
 
 export function filesystemBrowseFailureContext(
@@ -48,7 +59,7 @@ export function makeFilesystemRpcHandlers(
     readonly externalLauncher: Pick<ExternalLauncher.ExternalLauncher["Service"], "launchEditor">;
     readonly projectionSnapshotQuery: Pick<
       ProjectionSnapshotQuery.ProjectionSnapshotQueryShape,
-      "getThreadShellById" | "getProjectShellById"
+      "getThreadShellById" | "getThreadDetailById" | "getProjectShellById"
     >;
     readonly workspaceEntries: Pick<WorkspaceEntries.WorkspaceEntries["Service"], "browse">;
   },
@@ -83,6 +94,24 @@ export function makeFilesystemRpcHandlers(
       observeEffect(
         WS_METHODS.assetsCreateUrl,
         Effect.gen(function* () {
+          if (input.resource._tag === "tool-image") {
+            const resource = input.resource;
+            const thread = yield* projectionSnapshotQuery
+              .getThreadDetailById(resource.threadId)
+              .pipe(
+                Effect.mapError(
+                  (cause) => new AssetWorkspaceContextResolutionError({ resource, cause }),
+                ),
+              );
+            if (Option.isNone(thread)) {
+              return yield* new AssetWorkspaceContextNotFoundError({ resource });
+            }
+            const authorized = threadAuthorizesToolImage(thread.value, resource.path);
+            return yield* issueAssetUrl({
+              resource,
+              ...(authorized ? { authorizedToolImagePath: resource.path } : {}),
+            });
+          }
           if (input.resource._tag !== "workspace-file") {
             return yield* issueAssetUrl({ resource: input.resource });
           }

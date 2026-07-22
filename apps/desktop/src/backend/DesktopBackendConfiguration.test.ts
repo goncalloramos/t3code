@@ -121,6 +121,43 @@ const withHarness = <A, E, R>(
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
 
 describe("DesktopBackendConfiguration", () => {
+  it.effect("passes APNs credentials only through the primary bootstrap", () =>
+    Effect.gen(function* () {
+      const fileSystem = yield* FileSystem.FileSystem;
+      const baseDir = yield* fileSystem.makeTempDirectoryScoped({
+        prefix: "t3-desktop-backend-config-test-",
+      });
+      const credentials = {
+        teamId: "TEAM123456",
+        keyId: "KEY1234567",
+        bundleId: "com.goncalloramos.t3code.mobile" as const,
+        privateKey: "private-key-material",
+      };
+      const configuration = yield* DesktopBackendConfiguration.DesktopBackendConfiguration.pipe(
+        Effect.provide(
+          Layer.effect(
+            DesktopBackendConfiguration.DesktopBackendConfiguration,
+            DesktopBackendConfiguration.makeWithApnsCredentials(
+              Effect.succeed(Option.some(credentials)),
+            ),
+          ).pipe(
+            Layer.provideMerge(serverExposureLayer),
+            Layer.provideMerge(DesktopAppSettings.layerTest()),
+            Layer.provideMerge(DesktopWslEnvironment.layerTest()),
+            Layer.provideMerge(makeEnvironmentLayer(baseDir)),
+          ),
+        ),
+      );
+
+      const primary = yield* configuration.resolvePrimary;
+      const wsl = yield* configuration.resolveWsl({ port: 5000, distro: null });
+      assert.deepEqual(primary.bootstrap.apnsCredentials, credentials);
+      assert.isUndefined(wsl.bootstrap.apnsCredentials);
+      assert.notInclude(primary.args.join(" "), credentials.privateKey);
+      assert.notInclude(Object.values(primary.env).join(" "), credentials.privateKey);
+    }).pipe(Effect.scoped, Effect.provide(NodeServices.layer)),
+  );
+
   it.effect("resolvePrimary produces a stable scoped bootstrap token", () =>
     withHarness(
       Effect.gen(function* () {

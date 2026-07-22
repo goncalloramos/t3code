@@ -6,11 +6,13 @@ import {
   IsoDateTime,
   MessageId,
   ModelSelection,
+  OrchestrationProposedPlanId,
   ProjectId,
   ProviderInteractionMode,
   RuntimeMode,
   ThreadId,
   type ModelSelection as ModelSelectionType,
+  type OrchestrationProposedPlanId as OrchestrationProposedPlanIdType,
   type ProjectId as ProjectIdType,
   type ProviderInteractionMode as ProviderInteractionModeType,
   type RuntimeMode as RuntimeModeType,
@@ -21,7 +23,7 @@ import { DraftComposerImageAttachmentSchema } from "../lib/composer-image-schema
 import type { DraftComposerImageAttachment } from "../lib/composerImages";
 import { scopedThreadKey } from "../lib/scopedEntities";
 
-const THREAD_OUTBOX_SCHEMA_VERSION = 3;
+const THREAD_OUTBOX_SCHEMA_VERSION = 4;
 const THREAD_OUTBOX_MAX_RETRY_DELAY_MS = 16_000;
 
 const QueuedThreadCreationSchema = Schema.Struct({
@@ -34,10 +36,16 @@ const QueuedThreadCreationSchema = Schema.Struct({
   branch: Schema.NullOr(Schema.String),
   worktreePath: Schema.NullOr(Schema.String),
   startFromOrigin: Schema.optional(Schema.Boolean),
+  title: Schema.optional(Schema.String),
+});
+
+const QueuedSourceProposedPlanSchema = Schema.Struct({
+  threadId: ThreadId,
+  planId: OrchestrationProposedPlanId,
 });
 
 export const QueuedThreadMessageSchema = Schema.Struct({
-  schemaVersion: Schema.Literals([1, 2, THREAD_OUTBOX_SCHEMA_VERSION]),
+  schemaVersion: Schema.Literals([1, 2, 3, THREAD_OUTBOX_SCHEMA_VERSION]),
   environmentId: EnvironmentId,
   threadId: ThreadId,
   messageId: MessageId,
@@ -47,6 +55,7 @@ export const QueuedThreadMessageSchema = Schema.Struct({
   modelSelection: Schema.optional(ModelSelection),
   runtimeMode: Schema.optional(RuntimeMode),
   interactionMode: Schema.optional(ProviderInteractionMode),
+  sourceProposedPlan: Schema.optional(QueuedSourceProposedPlanSchema),
   // Present when the queued item creates a brand-new thread (pending task)
   // instead of appending a turn to an existing one.
   creation: Schema.optional(QueuedThreadCreationSchema),
@@ -64,6 +73,7 @@ export interface QueuedThreadCreation {
   readonly branch: string | null;
   readonly worktreePath: string | null;
   readonly startFromOrigin?: boolean;
+  readonly title?: string;
 }
 
 export interface QueuedThreadMessage {
@@ -76,6 +86,10 @@ export interface QueuedThreadMessage {
   readonly modelSelection?: ModelSelectionType;
   readonly runtimeMode?: RuntimeModeType;
   readonly interactionMode?: ProviderInteractionModeType;
+  readonly sourceProposedPlan?: {
+    readonly threadId: ThreadId;
+    readonly planId: OrchestrationProposedPlanIdType;
+  };
   readonly creation?: QueuedThreadCreation;
   readonly createdAt: string;
 }
