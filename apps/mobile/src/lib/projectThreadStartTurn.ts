@@ -6,9 +6,13 @@ import {
   type ProjectId,
   type ProviderInteractionMode,
   type RuntimeMode,
+  type OrchestrationProposedPlanId,
 } from "@t3tools/contracts";
 
-import { toUploadChatImageAttachments, type DraftComposerImageAttachment } from "./composerImages";
+import {
+  toUploadChatImageAttachments,
+  type DraftComposerImageAttachment,
+} from "./composerImageAttachments";
 
 export function deriveThreadTitleFromPrompt(value: string): string {
   const trimmed = value.trim();
@@ -38,6 +42,11 @@ export interface ProjectThreadStartTurnSpec {
   readonly startFromOrigin: boolean;
   /** Generated temp branch for worktree mode; unused for local mode. */
   readonly worktreeBranchName: string;
+  readonly title?: string;
+  readonly sourceProposedPlan?: {
+    readonly threadId: ThreadId;
+    readonly planId: OrchestrationProposedPlanId;
+  };
 }
 
 /**
@@ -46,7 +55,7 @@ export interface ProjectThreadStartTurnSpec {
  * offline outbox drain so both deliver identical commands.
  */
 export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpec) {
-  const title = deriveThreadTitleFromPrompt(spec.text);
+  const title = spec.title?.trim() || deriveThreadTitleFromPrompt(spec.text);
   const isWorktree = spec.workspaceMode === "worktree";
   return {
     commandId: CommandId.make(spec.commandId),
@@ -61,6 +70,7 @@ export function buildProjectThreadStartTurnInput(spec: ProjectThreadStartTurnSpe
     titleSeed: title,
     runtimeMode: spec.runtimeMode,
     interactionMode: spec.interactionMode,
+    ...(spec.sourceProposedPlan ? { sourceProposedPlan: spec.sourceProposedPlan } : {}),
     bootstrap: {
       createThread: {
         projectId: spec.projectId,

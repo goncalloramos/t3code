@@ -1,18 +1,22 @@
 import { useAtomValue } from "@effect/atom-react";
 import { useCallback, useMemo, useState } from "react";
 
-import { ApprovalRequestId, type ProviderApprovalDecision } from "@t3tools/contracts";
+import {
+  buildPendingUserInputAnswers,
+  setPendingUserInputCustomAnswer,
+  togglePendingUserInputOptionSelection,
+  type PendingUserInputDraftAnswer,
+} from "@t3tools/client-runtime/pending-user-input";
+import {
+  ApprovalRequestId,
+  type ProviderApprovalDecision,
+  type UserInputQuestion,
+} from "@t3tools/contracts";
 import { Atom } from "effect/unstable/reactivity";
 
 import { threadEnvironment } from "../state/threads";
 import { scopedRequestKey } from "../lib/scopedEntities";
-import {
-  buildPendingUserInputAnswers,
-  derivePendingApprovals,
-  derivePendingUserInputs,
-  setPendingUserInputCustomAnswer,
-  type PendingUserInputDraftAnswer,
-} from "../lib/threadActivity";
+import { derivePendingApprovals, derivePendingUserInputs } from "../lib/threadActivity";
 import { appAtomRegistry } from "./atom-registry";
 import { useSelectedThreadDetail } from "./use-thread-detail";
 import { useThreadSelection } from "./use-thread-selection";
@@ -22,15 +26,22 @@ const userInputDraftsByRequestKeyAtom = Atom.make<
   Record<string, Record<string, PendingUserInputDraftAnswer>>
 >({}).pipe(Atom.keepAlive, Atom.withLabel("mobile:user-input-drafts"));
 
-function setUserInputDraftOption(requestKey: string, questionId: string, label: string): void {
+function setUserInputDraftOption(
+  requestKey: string,
+  question: UserInputQuestion,
+  label: string,
+): void {
   const current = appAtomRegistry.get(userInputDraftsByRequestKeyAtom);
+  const requestDrafts = current[requestKey] ?? {};
   appAtomRegistry.set(userInputDraftsByRequestKeyAtom, {
     ...current,
     [requestKey]: {
-      ...current[requestKey],
-      [questionId]: {
-        selectedOptionLabel: label,
-      },
+      ...requestDrafts,
+      [question.id]: togglePendingUserInputOptionSelection(
+        question,
+        requestDrafts[question.id],
+        label,
+      ),
     },
   });
 }
@@ -97,9 +108,11 @@ export function useSelectedThreadRequests() {
       }
 
       const requestKey = scopedRequestKey(selectedThreadShell.environmentId, requestId);
-      setUserInputDraftOption(requestKey, questionId, label);
+      const question = activePendingUserInput?.questions.find((entry) => entry.id === questionId);
+      if (!question) return;
+      setUserInputDraftOption(requestKey, question, label);
     },
-    [selectedThreadShell],
+    [activePendingUserInput, selectedThreadShell],
   );
 
   const onChangeUserInputCustomAnswer = useCallback(

@@ -1,5 +1,6 @@
 import { ApprovalRequestId, isToolLifecycleItemType } from "@t3tools/contracts";
 import { extractDirectWorkLogImages, type WorkLogImage } from "@t3tools/client-runtime/chat-images";
+export type { PendingUserInputDraftAnswer } from "@t3tools/client-runtime/pending-user-input";
 import type {
   OrchestrationLatestTurn,
   OrchestrationThread,
@@ -24,11 +25,6 @@ export interface PendingUserInput {
   readonly requestId: ApprovalRequestId;
   readonly createdAt: string;
   readonly questions: ReadonlyArray<UserInputQuestion>;
-}
-
-export interface PendingUserInputDraftAnswer {
-  readonly selectedOptionLabel?: string;
-  readonly customAnswer?: string;
 }
 
 export interface ThreadFeedActivity {
@@ -212,24 +208,6 @@ function parseUserInputQuestions(
     .filter((question): question is UserInputQuestion => question !== null);
 
   return parsed.length > 0 ? parsed : null;
-}
-
-function normalizeDraftAnswer(value: string | undefined): string | null {
-  if (typeof value !== "string") {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function resolvePendingUserInputAnswer(
-  draft: PendingUserInputDraftAnswer | undefined,
-): string | null {
-  const customAnswer = normalizeDraftAnswer(draft?.customAnswer);
-  if (customAnswer) {
-    return customAnswer;
-  }
-  return normalizeDraftAnswer(draft?.selectedOptionLabel);
 }
 
 function deriveWorkLogEntries(
@@ -1287,35 +1265,6 @@ export function derivePendingUserInputs(
   }
 
   return Arr.sortWith(openByRequestId.values(), (s) => new Date(s.createdAt), Order.Date);
-}
-
-export function setPendingUserInputCustomAnswer(
-  draft: PendingUserInputDraftAnswer | undefined,
-  customAnswer: string,
-): PendingUserInputDraftAnswer {
-  const selectedOptionLabel =
-    customAnswer.trim().length > 0 ? undefined : draft?.selectedOptionLabel;
-  return {
-    customAnswer,
-    ...(selectedOptionLabel ? { selectedOptionLabel } : {}),
-  };
-}
-
-export function buildPendingUserInputAnswers(
-  questions: ReadonlyArray<UserInputQuestion>,
-  draftAnswers: Record<string, PendingUserInputDraftAnswer>,
-): Record<string, string> | null {
-  const answers: Record<string, string> = {};
-
-  for (const question of questions) {
-    const answer = resolvePendingUserInputAnswer(draftAnswers[question.id]);
-    if (!answer) {
-      return null;
-    }
-    answers[question.id] = answer;
-  }
-
-  return answers;
 }
 
 export function buildThreadFeed(

@@ -227,6 +227,9 @@ export function useThreadOutboxDrain(): void {
           modelSelection: settings.modelSelection,
           runtimeMode: settings.runtimeMode,
           interactionMode: settings.interactionMode,
+          ...(queuedMessage.sourceProposedPlan
+            ? { sourceProposedPlan: queuedMessage.sourceProposedPlan }
+            : {}),
           createdAt: queuedMessage.createdAt,
         },
       });
@@ -271,6 +274,10 @@ export function useThreadOutboxDrain(): void {
           worktreePath: creation.worktreePath,
           startFromOrigin: creation.startFromOrigin ?? false,
           worktreeBranchName: buildTemporaryWorktreeBranchName(randomHex),
+          ...(creation.title ? { title: creation.title } : {}),
+          ...(queuedMessage.sourceProposedPlan
+            ? { sourceProposedPlan: queuedMessage.sourceProposedPlan }
+            : {}),
         }),
       });
       return completeDelivery(deliveryResult);

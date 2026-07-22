@@ -8,6 +8,7 @@ import {
   type ModelSelection,
   type ProviderInteractionMode,
   type RuntimeMode,
+  type OrchestrationProposedPlanId,
 } from "@t3tools/contracts";
 import { buildTemporaryWorktreeBranchName } from "@t3tools/shared/git";
 import * as Cause from "effect/Cause";
@@ -39,6 +40,11 @@ export function useCreateProjectThread() {
       readonly initialAttachments: ReadonlyArray<DraftComposerImageAttachment>;
       /** Reuse identifiers from a queued pending task instead of minting new ones. */
       readonly turnMetadata?: TurnCommandMetadata;
+      readonly title?: string;
+      readonly sourceProposedPlan?: {
+        readonly threadId: ThreadId;
+        readonly planId: OrchestrationProposedPlanId;
+      };
     }) => {
       const metadata = input.turnMetadata ?? makeTurnCommandMetadata();
       const threadId = ThreadId.make(metadata.threadId);
@@ -75,6 +81,8 @@ export function useCreateProjectThread() {
           worktreePath: input.worktreePath,
           startFromOrigin: input.startFromOrigin ?? false,
           worktreeBranchName: buildTemporaryWorktreeBranchName(randomHex),
+          ...(input.title ? { title: input.title } : {}),
+          ...(input.sourceProposedPlan ? { sourceProposedPlan: input.sourceProposedPlan } : {}),
         }),
       });
       if (AsyncResult.isFailure(result)) {
